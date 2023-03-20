@@ -37,6 +37,7 @@
 #include "leveldb/comparator.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
+#include "vlog_manager.h"
 
 namespace leveldb {
 
@@ -55,6 +56,8 @@ class Repairer {
         next_file_number_(1) {
     // TableCache can be small since we expect each table to be opened once.
     table_cache_ = new TableCache(dbname_, options_, 10);
+    //3.20新增
+    vlog_manager_ = new VlogManager();
   }
 
   ~Repairer() {
@@ -203,7 +206,10 @@ class Repairer {
     FileMetaData meta;
     meta.number = next_file_number_++;
     Iterator* iter = mem->NewIterator();
-    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    //3.20 修改参数列表
+    uint64_t vlog_number = next_file_number_++;
+    //3.20 修改
+    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, vlog_manager_, vlog_number);
     delete iter;
     mem->Unref();
     mem = nullptr;
@@ -434,6 +440,8 @@ class Repairer {
   bool owns_cache_;
   TableCache* table_cache_;
   VersionEdit edit_;
+  //3.20新增
+  VlogManager* vlog_manager_;
 
   std::vector<std::string> manifests_;
   std::vector<uint64_t> table_numbers_;

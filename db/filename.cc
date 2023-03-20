@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //3.13✔
+//3.16新增 vlogfile
 
 #include "db/filename.h"
 
@@ -34,6 +35,12 @@ std::string LogFileName(const std::string& dbname, uint64_t number) {
 std::string TableFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "ldb");
+}
+
+//3.16
+std::string VlogFileName(const std::string& dbname, uint64_t number) {
+  assert(number > 0);
+  return MakeFileName(dbname, number, "vlog");
 }
 
 std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
@@ -115,7 +122,9 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
       *type = kTableFile;
     } else if (suffix == Slice(".dbtmp")) {
       *type = kTempFile;
-    } else {
+    } else if (suffix == Slice(".vlog")){
+      *type = kVlogFile;
+    }else {
       return false;
     }
     *number = num;

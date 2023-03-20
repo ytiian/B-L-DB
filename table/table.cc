@@ -51,6 +51,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
   //把footer的内容读到footer_input中
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
+  //读footer（磁盘读）
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
                         &footer_input, footer_space);
   if (!s.ok()) return s;
@@ -82,6 +83,8 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
+    //每次文件->Table都会给这个table分配一个cache_id
+    //cache_id决定这个table的data block将来会放在哪个编号的cache
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->filter_data = nullptr;
     rep->filter = nullptr;

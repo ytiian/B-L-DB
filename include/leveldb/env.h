@@ -258,6 +258,11 @@ class LEVELDB_EXPORT SequentialFile {
   // REQUIRES: External synchronization
   //从文件中跳过n个字节
   virtual Status Skip(uint64_t n) = 0;
+  //3.16新增
+  virtual Status SkipFromHead(uint64_t pos) {
+    (void)pos;
+    return Status::NotSupported("SkipFromHead");
+  }
 };
 
 // A file abstraction for randomly reading the contents of a file.

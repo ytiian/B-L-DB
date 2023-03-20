@@ -12,6 +12,7 @@
 
 #include "db/dbformat.h"
 #include "db/log_writer.h"
+#include "db/vlog_manager.h"
 #include "db/snapshot.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
@@ -70,6 +71,11 @@ class DBImpl : public DB {
   // Samples are taken approximately once every config::kReadBytesPeriod
   // bytes.
   void RecordReadSample(Slice key);
+
+  //3.19
+  std::string GetName();
+  void GetPtr(const ReadOptions& options, const Slice& key,
+                        uint64_t* number, uint64_t* offset);
 
  private:
   friend class DB;
@@ -181,6 +187,8 @@ class DBImpl : public DB {
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   log::Writer* log_;
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
+  //3.17
+  VlogManager* vlog_manager_;
 
   // Queue of writers.
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);

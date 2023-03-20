@@ -26,7 +26,8 @@ enum FileType {
   kDescriptorFile,
   kCurrentFile,
   kTempFile,
-  kInfoLogFile  // Either the current one, or an old one
+  kInfoLogFile,  // Either the current one, or an old one
+  kVlogFile
 };
 
 // Return the name of the log file with the specified number
@@ -39,6 +40,8 @@ std::string LogFileName(const std::string& dbname, uint64_t number);
 // "dbname".
 std::string TableFileName(const std::string& dbname, uint64_t number);
 
+//3.16
+std::string VlogFileName(const std::string& dbname, uint64_t number);
 // Return the legacy file name for an sstable with the specified number
 // in the db named by "dbname". The result will be prefixed with
 // "dbname".

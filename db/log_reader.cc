@@ -30,19 +30,29 @@ Reader::Reader(SequentialFile* file, Reporter* reporter, bool checksum,
 
 Reader::~Reader() { delete[] backing_store_; }
 
+//跳到初始位置（只能跳到某块起始的位置）
 bool Reader::SkipToInitialBlock() {
+  //在块中的位置
   const size_t offset_in_block = initial_offset_ % kBlockSize;
+  //块在文件中的位置
   uint64_t block_start_location = initial_offset_ - offset_in_block;
 
   // Don't search a block if we'd be in the trailer
+  //小于6KB不足为一个头部
   if (offset_in_block > kBlockSize - 6) {
+    //offset_in_block是否等于0都没关系，后面没用到
+    //从下一块头开始查
     block_start_location += kBlockSize;
   }
-
+  
+  //end一开始是块开头的位置
   end_of_buffer_offset_ = block_start_location;
+
+  record_start_offset_ = block_start_location;
 
   // Skip to start of first block that can contain the initial record
   if (block_start_location > 0) {
+    //跳到这个块的开始位置
     Status skip_status = file_->Skip(block_start_location);
     if (!skip_status.ok()) {
       ReportDrop(block_start_location, skip_status);
@@ -53,12 +63,18 @@ bool Reader::SkipToInitialBlock() {
   return true;
 }
 
+//读记录
+//实际结果存放在scratch中
 bool Reader::ReadRecord(Slice* record, std::string* scratch) {
+  //如果现在要查的位置在上次返回的位置后面，则需要跳到块开始位置
+  //说明是第一次进入这个函数，需要对初始位置初始化
   if (last_record_offset_ < initial_offset_) {
     if (!SkipToInitialBlock()) {
       return false;
     }
   }
+
+  record_end_offset_ = record_start_offset_;
 
   scratch->clear();
   record->clear();
@@ -69,6 +85,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
   Slice fragment;
   while (true) {
+    //读物理记录，存放在fragment中
     const unsigned int record_type = ReadPhysicalRecord(&fragment);
 
     // ReadPhysicalRecord may have only had an empty trailer remaining in its
@@ -90,6 +107,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
     switch (record_type) {
       case kFullType:
+      //已经是完整的一条记录了
         if (in_fragmented_record) {
           // Handle bug in earlier versions of log::Writer where
           // it could emit an empty kFirstType record at the tail end
@@ -186,13 +204,18 @@ void Reader::ReportDrop(uint64_t bytes, const Status& reason) {
   }
 }
 
+//返回的是type，存放的是记录的数据部分
 unsigned int Reader::ReadPhysicalRecord(Slice* result) {
   while (true) {
+    //缓冲区的内容还不足以解析头部
     if (buffer_.size() < kHeaderSize) {
-      if (!eof_) {
+      if (!eof_) {//还没到文件末尾？
+        // 说明buffer剩余内容是填充的0，没有用，直接清空
         // Last read was a full read, so this is a trailer to skip
         buffer_.clear();
+        //从上次的位置继续读一个块的大小
         Status status = file_->Read(kBlockSize, &buffer_, backing_store_);
+        //当前文件指针所在的位置
         end_of_buffer_offset_ += buffer_.size();
         if (!status.ok()) {
           buffer_.clear();
@@ -200,6 +223,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
           eof_ = true;
           return kEof;
         } else if (buffer_.size() < kBlockSize) {
+          //没读够一个块，说明文件已经读完
           eof_ = true;
         }
         continue;
@@ -215,6 +239,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
 
     // Parse the header
     const char* header = buffer_.data();
+    //crc占4bytes，length占2bytes，type占1bytes
     const uint32_t a = static_cast<uint32_t>(header[4]) & 0xff;
     const uint32_t b = static_cast<uint32_t>(header[5]) & 0xff;
     const unsigned int type = header[6];
@@ -244,6 +269,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
     if (checksum_) {
       uint32_t expected_crc = crc32c::Unmask(DecodeFixed32(header));
       uint32_t actual_crc = crc32c::Value(header + 6, 1 + length);
+      //crc验证失败
       if (actual_crc != expected_crc) {
         // Drop the rest of the buffer since "length" itself may have
         // been corrupted and if we trust it, we could find some
@@ -256,6 +282,9 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
       }
     }
 
+    //去掉记录的头部
+    record_end_offset_ += kHeaderSize;
+    record_end_offset_ += length;
     buffer_.remove_prefix(kHeaderSize + length);
 
     // Skip physical record that started before initial_offset_
@@ -266,8 +295,19 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
     }
 
     *result = Slice(header + kHeaderSize, length);
+    if(buffer_.size() < kHeaderSize){
+      record_end_offset_ += buffer_.size();
+    }
     return type;
   }
+}
+
+bool Reader::IsEnd(){
+  return eof_;
+}
+
+uint64_t Reader::GetRecordOffset(){
+  return record_start_offset_;
 }
 
 }  // namespace log

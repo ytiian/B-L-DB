@@ -56,9 +56,12 @@ class Reader {
   bool ReadRecord(Slice* record, std::string* scratch);
 
   // Returns the physical offset of the last record returned by ReadRecord.
-  //
   // Undefined before the first call to ReadRecord.
   uint64_t LastRecordOffset();
+
+  bool IsEnd();
+
+  uint64_t GetRecordOffset();
 
  private:
   // Extend record types with the following special values
@@ -99,6 +102,11 @@ class Reader {
 
   // Offset at which to start looking for the first record to return
   uint64_t const initial_offset_;
+
+//3.20新增
+  uint64_t record_end_offset_;//记录第n条记录的结尾，也是第n+1条的开始；第n+1开始时，要接过这个值
+  
+  uint64_t record_start_offset_;//第n条记录的开始，用于返回offset
 
   // True if we are resynchronizing after a seek (initial_offset_ > 0). In
   // particular, a run of kMiddleType and kLastType records can be silently

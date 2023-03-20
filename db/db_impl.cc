@@ -123,6 +123,8 @@ Options SanitizeOptions(const std::string& dbname,
   return result;
 }
 
+//保留10个文件的额度待用，
+//max_open_files=1000，因此TableCache大概可以缓存900个文件的索引信息
 static int TableCacheSize(const Options& sanitized_options) {
   // Reserve ten files or so for other uses and give the rest to TableCache.
   return sanitized_options.max_open_files - kNumNonTableCacheFiles;
@@ -148,6 +150,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       logfile_(nullptr),
       logfile_number_(0),
       log_(nullptr),
+      //3.17
+      vlog_manager_(nullptr),
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
@@ -549,14 +553,16 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   pending_outputs_.insert(meta.number);
   Iterator* iter = mem->NewIterator();
   Log(options_.info_log, "Level-0 table #%llu: started",
-      (unsigned long long)meta.number);
+      (unsigned long long)meta.number);  
 
   Status s;
   {
     mutex_.Unlock();
     //iter构建在mem上
     //mem->sstable
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    //修改
+    uint64_t vlog_number = versions_->NewFileNumber();
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, vlog_manager_, vlog_number);
     mutex_.Lock();
   }
 
@@ -1070,7 +1076,14 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         compact->compaction->IsBaseLevelForKey(ikey.user_key),
         (int)last_sequence_for_key, (int)compact->smallest_snapshot);
 #endif
-
+    //3.17
+    if (drop){//要丢弃，更新gc统计信息
+      Slice address = input->value();
+      uint64_t vlog_num;
+      GetVarint64(&address, &vlog_num);
+      uint64_t update_size = input->key().size() + input->value().size();
+      vlog_manager_->UpdateGarbageSize(vlog_num, update_size);
+    }
     if (!drop) {//不丢弃，要写入output文件
       // Open output file if necessary
       //说明当前没有待写的输出文件，需要新建
@@ -1129,6 +1142,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     stats.bytes_written += compact->outputs[i].file_size;
   }
 
+  //3.17判断vlog文件垃圾量是否超出阈值
+  vlog_manager_->UpdateNeedGCFile();
+  
   mutex_.Lock();
   stats_[compact->compaction->level() + 1].Add(stats);
 
@@ -1257,6 +1273,16 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   return s;
 }
 
+//3.19
+void DBImpl::GetPtr(const ReadOptions& options, const Slice& key,
+                        uint64_t* number, uint64_t* offset) {
+  std::string* ptr;
+  Get(options, key, ptr);
+  Slice* input = new Slice(*ptr);
+  GetVarint64(input, number);
+  GetVarint64(input, offset);
+}
+
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
@@ -1275,6 +1301,10 @@ void DBImpl::RecordReadSample(Slice key) {
   if (versions_->current()->RecordReadSample(key)) {
     MaybeScheduleCompaction();
   }
+}
+
+std::string DBImpl::GetName(){
+  return dbname_;
 }
 
 const Snapshot* DBImpl::GetSnapshot() {
@@ -1302,20 +1332,28 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   w.sync = options.sync;
   w.done = false;
 
+  //如果当前线程获得锁，则其它线程被阻塞在此处
   MutexLock l(&mutex_);
   writers_.push_back(&w);
+  //w.done表示当前线程还没完成，并且不是writers_队列的队首时，当前线程需要在循环中等待
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
   }
+  //如果是因为任务被完成而跳出循环，则直接返回（当前写线程已经完成）
   if (w.done) {
     return w.status;
   }
 
+  //否则就是因为是队列的队首所以跳出
+  //以下是只有作为队首的线程才会执行的代码片段：
   // May temporarily unlock and wait.
+
+  //检查memtable的剩余空间
   Status status = MakeRoomForWrite(updates == nullptr);
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
+    //将现在writer_队列后挂的所有写线程的writebatch都合并成一个writebatch
     WriteBatch* write_batch = BuildBatchGroup(&last_writer);
     WriteBatchInternal::SetSequence(write_batch, last_sequence + 1);
     last_sequence += WriteBatchInternal::Count(write_batch);
@@ -1324,8 +1362,14 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // during this phase since &w is currently responsible for logging
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
+
     {
+      //writer_队列中的所有writebatch合并之后，队首线程还要继续将这个writebatch写入memtable
+      //此处该线程会释放锁
+      //释放锁会导致：其它的线程可以执行前面的代码片段，即进入writer_队列
+      //因为接下来还是只有队首的线程会写memtable，其它的线程并不会来到这里，所以就算释放锁也没有关系
       mutex_.Unlock();
+      //将writebatch先写WAL
       status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
       bool sync_error = false;
       if (status.ok() && options.sync) {
@@ -1335,8 +1379,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         }
       }
       if (status.ok()) {
+        //写memtable
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
       }
+      //写入memtable完成之后再次获得锁，线程将暂时不会再加入writer_队列
       mutex_.Lock();
       if (sync_error) {
         // The state of the log file is indeterminate: the log record we
@@ -1351,18 +1397,26 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   }
 
   while (true) {
+    //在执行前面的BuildBatchGroup函数之后，last_writer会设置为上一次合并的writebatch中的最后一个线程的write
+    //因此这个循环就是将所有参与刚才上一次合并的线程出队并唤醒。
+    //这些线程会在：
+    //  if (w.done) {
+    // return w.status;
+    //}
+    //跳出Write函数
     Writer* ready = writers_.front();
     writers_.pop_front();
     if (ready != &w) {
       ready->status = status;
-      ready->done = true;
+      ready->done = true;//表示这个线程的任务已经完成，更新标记，使其能退出当前函数
       ready->cv.Signal();
     }
-    if (ready == last_writer) break;
+    if (ready == last_writer) break;//对当前的队首线程不做处理，等执行到函数的结尾会自然消亡
   }
 
   // Notify new head of write queue
   if (!writers_.empty()) {
+    //如果队列不为空，则唤醒新的队首线程，执行新一轮上述过程
     writers_.front()->cv.Signal();
   }
 

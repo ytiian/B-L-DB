@@ -162,6 +162,13 @@ class PosixSequentialFile final : public SequentialFile {
     }
     return Status::OK();
   }
+  //3.16 移动到file_ 偏移量为pos的位置
+  Status SkipFromHead(uint64_t pos){
+    if (fseek(file_, pos, SEEK_SET)) {
+      return PosixError(filename_, errno);
+    }
+    return Status::OK();
+  }
 
  private:
   const int fd_;

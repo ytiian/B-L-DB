@@ -20,18 +20,25 @@ static void InitTypeCrc(uint32_t* type_crc) {
   }
 }
 
-Writer::Writer(WritableFile* dest) : dest_(dest), block_offset_(0) {
+Writer::Writer(WritableFile* dest) : dest_(dest), 
+block_offset_(0), 
+last_offset_(0),
+file_offset_(0) {
   InitTypeCrc(type_crc_);
 }
 
 Writer::Writer(WritableFile* dest, uint64_t dest_length)
-    : dest_(dest), block_offset_(dest_length % kBlockSize) {
+    : dest_(dest), 
+    block_offset_(dest_length % kBlockSize),
+    last_offset_(dest_length),
+    file_offset_(dest_length) {
   InitTypeCrc(type_crc_);
 }
 
 Writer::~Writer() = default;
 
 Status Writer::AddRecord(const Slice& slice) {
+  last_offset_=file_offset_;//记录开始的偏移位置，用于返回
   const char* ptr = slice.data();
   size_t left = slice.size();
 
@@ -49,6 +56,7 @@ Status Writer::AddRecord(const Slice& slice) {
         // Fill the trailer (literal below relies on kHeaderSize being 7)
         static_assert(kHeaderSize == 7, "");
         dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover));
+        file_offset_+=leftover;
       }
       block_offset_ = 0;
     }
@@ -79,6 +87,10 @@ Status Writer::AddRecord(const Slice& slice) {
   return s;
 }
 
+uint64_t Writer::GetOffset(){
+  return last_offset_;
+}
+
 Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
                                   size_t length) {
   assert(length <= 0xffff);  // Must fit in two bytes
@@ -104,6 +116,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
     }
   }
   block_offset_ += kHeaderSize + length;
+  file_offset_ += kHeaderSize + length;
   return s;
 }
 
