@@ -140,6 +140,7 @@ target_sources(leveldb
     "db/memtable.cc"
     "db/memtable.h"
     "db/repair.cc"
+    "db/run_manager.h"
     "db/skiplist.h"
     "db/snapshot.h"
     "db/table_cache.cc"
@@ -189,6 +190,16 @@ target_sources(leveldb
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    "trees/b_tree.h"
+    "trees/inner_node.h"
+    "trees/leaf_node.h"
+    "trees/lock_context.h"
+    "trees/node.h"
+    "trees/rw_inner_node.h"
+    "trees/rw_leaf_node.h"
+    "trees/rw_node.h"
+    "trees/thread_safe_b_plus_tree.h"
+    "trees/vanilla_b_plus_tree.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -330,6 +341,7 @@ if(LEVELDB_BUILD_TESTS)
         "db/filename_test.cc"
         "db/log_test.cc"
         "db/recovery_test.cc"
+        "db/run_manager_test.cc"
         "db/skiplist_test.cc"
         "db/version_edit_test.cc"
         "db/version_set_test.cc"

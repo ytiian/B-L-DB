@@ -6,6 +6,8 @@
 #define STORAGE_LEVELDB_DB_BUILDER_H_
 
 #include "leveldb/status.h"
+#include "trees/vanilla_b_plus_tree.h"
+#include <string>
 
 namespace leveldb {
 
@@ -23,7 +25,8 @@ class VersionEdit;
 // If no data is present in *iter, meta->file_size will be set to
 // zero, and no Table file will be produced.
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
-                  TableCache* table_cache, Iterator* iter, FileMetaData* meta);
+                  TableCache* table_cache, Iterator* iter, FileMetaData* meta, 
+                  VanillaBPlusTree<std::string, uint32_t>* btree);
 
 }  // namespace leveldb
 

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
+#include <iostream>
 
 #include "leveldb/export.h"
 
@@ -42,6 +43,8 @@ class LEVELDB_EXPORT Slice {
   // Intentionally copyable.
   Slice(const Slice&) = default;
   Slice& operator=(const Slice&) = default;
+
+  friend std::ostream& operator<<(std::ostream &out, const Slice &s);
 
   // Return a pointer to the beginning of the referenced data
   const char* data() const { return data_; }
@@ -108,6 +111,17 @@ inline int Slice::compare(const Slice& b) const {
       r = +1;
   }
   return r;
+}
+
+inline std::ostream& operator<<(std::ostream &out, const Slice &s){
+  out << s.ToString();
+  return out;
+}
+
+inline bool operator<(const Slice& a, const Slice& b){
+  if(a.compare(b) < 0)
+    return true;
+    return false;
 }
 
 }  // namespace leveldb

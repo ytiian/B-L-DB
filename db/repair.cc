@@ -24,6 +24,7 @@
 //   Store per-table metadata (smallest, largest, largest-seq#, ...)
 //   in the table's meta section to speed up ScanTable.
 
+#include <string>
 #include "db/builder.h"
 #include "db/db_impl.h"
 #include "db/dbformat.h"
@@ -203,7 +204,8 @@ class Repairer {
     FileMetaData meta;
     meta.number = next_file_number_++;
     Iterator* iter = mem->NewIterator();
-    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    VanillaBPlusTree<std::string, uint32_t> btree(options_.bTree_capacity);
+    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, &btree);
     delete iter;
     mem->Unref();
     mem = nullptr;

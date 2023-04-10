@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include <iostream>
+#include <string>
+#include <string>
 #include "db/builder.h"
 
 #include "db/dbformat.h"
@@ -15,7 +18,8 @@
 namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
-                  TableCache* table_cache, Iterator* iter, FileMetaData* meta) {
+                  TableCache* table_cache, Iterator* iter, FileMetaData* meta,
+                  VanillaBPlusTree<std::string, uint32_t>* btree) {
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
@@ -31,10 +35,19 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     TableBuilder* builder = new TableBuilder(options, file);
     meta->smallest.DecodeFrom(iter->key());
     Slice key;
+
     for (; iter->Valid(); iter->Next()) {
+      //std::cout<<"before!!!!!!!!insert1:!!!!!!!!!!!!!!!!!!"<<std::endl;
+      //std::cout<<btree->toString()<<std::endl;
       key = iter->key();
+      //返回的是internalkey，需要减掉8bits的tag（internalkey=userkey+tag）
+      Slice tmp(key.data(), key.size() - 8);
+      std::string usr_key = tmp.ToString();
+
       builder->Add(key, iter->value());
+      btree->insert(usr_key, meta->number);
     }
+
     if (!key.empty()) {
       meta->largest.DecodeFrom(key);
     }

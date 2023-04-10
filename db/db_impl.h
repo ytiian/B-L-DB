@@ -17,6 +17,7 @@
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+#include "trees/vanilla_b_plus_tree.h"
 
 namespace leveldb {
 
@@ -49,6 +50,7 @@ class DBImpl : public DB {
   void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) override;
   void CompactRange(const Slice* begin, const Slice* end) override;
 
+  void PrintTree() override;
   // Extra methods (for testing) that are not in the public DB interface
 
   // Compact any files in the named level that overlap [*begin,*end]
@@ -203,6 +205,8 @@ class DBImpl : public DB {
   Status bg_error_ GUARDED_BY(mutex_);
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
+
+  VanillaBPlusTree<std::string, uint32_t>* btree;
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

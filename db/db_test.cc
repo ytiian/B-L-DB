@@ -2163,6 +2163,8 @@ class ModelDB : public DB {
   }
   void CompactRange(const Slice* start, const Slice* end) override {}
 
+  void PrintTree() override {}
+
  private:
   class ModelIter : public Iterator {
    public:

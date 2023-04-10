@@ -140,6 +140,8 @@ struct LEVELDB_EXPORT Options {
   // Many applications will benefit from passing the result of
   // NewBloomFilterPolicy() here.
   const FilterPolicy* filter_policy = nullptr;
+
+  int bTree_capacity = 100;
 };
 
 // Options that control read operations

@@ -812,6 +812,7 @@ class Benchmark {
       for (int j = 0; j < entries_per_batch_; j++) {
         const int k = seq ? i + j : thread->rand.Uniform(FLAGS_num);
         key.Set(k);
+        //std::cout<<"benchmark:"<<key.slice()<<std::endl;
         batch.Put(key.slice(), gen.Generate(value_size_));
         bytes += value_size_ + key.slice().size();
         thread->stats.FinishedSingleOp();
@@ -823,6 +824,7 @@ class Benchmark {
       }
     }
     thread->stats.AddBytes(bytes);
+    //db_->PrintTree();
   }
 
   void ReadSequential(ThreadState* thread) {

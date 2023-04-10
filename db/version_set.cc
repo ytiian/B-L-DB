@@ -1186,6 +1186,7 @@ void VersionSet::Finalize(Version* v) {
   double best_score = -1;//该层的分数
 
   //逐层计算分数
+  //不算最后一层。最后一层只能被倒数第二层选择，一起compacion
   for (int level = 0; level < config::kNumLevels - 1; level++) {
     double score;
     if (level == 0) {
@@ -1589,7 +1590,7 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   InternalKey smallest, largest;
 
   //c->inputs_[0]是已经选择的level层的待compaction文件
-  //从current_->files_[level]中选择边界是同一个userkey的假如 inputs_中
+  //从current_->files_[level]中选择边界是同一个userkey的加入inputs_中
   AddBoundaryInputs(icmp_, current_->files_[level], &c->inputs_[0]);
   GetRange(c->inputs_[0], &smallest, &largest);
 

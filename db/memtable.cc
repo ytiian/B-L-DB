@@ -8,6 +8,7 @@
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
 #include "util/coding.h"
+#include <iostream>
 
 namespace leveldb {
 
@@ -83,7 +84,8 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
   size_t val_size = value.size();
-  size_t internal_key_size = key_size + 8;
+  //std::cout<<"keysize："<<key_size<<std::endl;
+  size_t internal_key_size = key_size + 8;//sequence和type共8byte
   const size_t encoded_len = VarintLength(internal_key_size) +
                              internal_key_size + VarintLength(val_size) +
                              val_size;
@@ -97,6 +99,7 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   std::memcpy(p, value.data(), val_size);
   assert(p + val_size == buf + encoded_len);
   table_.Insert(buf);
+  //std::cout<<"memtable:"<<buf<<std::endl;
 }
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {

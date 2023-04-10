@@ -153,7 +153,9 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       background_compaction_scheduled_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
-                               &internal_comparator_)) {}
+                               &internal_comparator_)) {
+                                btree = new VanillaBPlusTree<std::string, uint32_t>(options_.bTree_capacity);
+                               }
 
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
@@ -556,7 +558,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     mutex_.Unlock();
     //iter构建在mem上
     //mem->sstable
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, btree);
     mutex_.Lock();
   }
 
@@ -1577,6 +1579,11 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
   v->Unref();
 }
 
+void DBImpl::PrintTree(){
+  std::cout<<"print tree:"<<std::endl;
+  std::cout<<btree->toString()<<std::endl;
+}
+
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
@@ -1668,5 +1675,6 @@ Status DestroyDB(const std::string& dbname, const Options& options) {
   }
   return result;
 }
+
 
 }  // namespace leveldb
