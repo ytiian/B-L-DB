@@ -48,7 +48,7 @@ class DBImpl : public DB {
   void ReleaseSnapshot(const Snapshot* snapshot) override;
   bool GetProperty(const Slice& property, std::string* value) override;
   void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) override;
-  void CompactRange(const Slice* begin, const Slice* end) override;
+  //void CompactRange(const Slice* begin, const Slice* end) override;
 
   void PrintTree() override;
   // Extra methods (for testing) that are not in the public DB interface
@@ -206,7 +206,7 @@ class DBImpl : public DB {
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
-  VanillaBPlusTree<std::string, uint32_t>* btree;
+  VanillaBPlusTree<std::string, uint64_t>* btree;
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

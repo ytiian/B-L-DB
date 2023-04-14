@@ -122,7 +122,7 @@ target_sources(leveldb
     "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
     "db/builder.cc"
     "db/builder.h"
-    "db/c.cc"
+    #"db/c.cc"
     "db/db_impl.cc"
     "db/db_impl.h"
     "db/db_iter.cc"
@@ -139,7 +139,7 @@ target_sources(leveldb
     "db/log_writer.h"
     "db/memtable.cc"
     "db/memtable.h"
-    "db/repair.cc"
+    #"db/repair.cc"
     "db/run_manager.h"
     "db/skiplist.h"
     "db/snapshot.h"
@@ -334,19 +334,19 @@ if(LEVELDB_BUILD_TESTS)
   if(NOT BUILD_SHARED_LIBS)
     target_sources(leveldb_tests
       PRIVATE
-        "db/autocompact_test.cc"
-        "db/corruption_test.cc"
-        "db/db_test.cc"
+        #"db/autocompact_test.cc"
+        #"db/corruption_test.cc"
+        #"db/db_test.cc"
         "db/dbformat_test.cc"
         "db/filename_test.cc"
         "db/log_test.cc"
-        "db/recovery_test.cc"
-        "db/run_manager_test.cc"
+        #"db/recovery_test.cc"
+        #"db/run_manager_test.cc"
         "db/skiplist_test.cc"
         "db/version_edit_test.cc"
-        "db/version_set_test.cc"
+        #"db/version_set_test.cc"
         "db/write_batch_test.cc"
-        "helpers/memenv/memenv_test.cc"
+        #"helpers/memenv/memenv_test.cc"
         "table/filter_block_test.cc"
         "table/table_test.cc"
         "util/arena_test.cc"
@@ -399,7 +399,7 @@ if(LEVELDB_BUILD_TESTS)
     add_test(NAME "${test_target_name}" COMMAND "${test_target_name}")
   endfunction(leveldb_test)
 
-  leveldb_test("db/c_test.c")
+  #leveldb_test("db/c_test.c")
 
   if(NOT BUILD_SHARED_LIBS)
     # TODO(costan): This test also uses

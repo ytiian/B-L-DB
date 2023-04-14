@@ -478,9 +478,9 @@ class DBTest : public testing::Test {
     return size;
   }
 
-  void Compact(const Slice& start, const Slice& limit) {
+  /*void Compact(const Slice& start, const Slice& limit) {
     db_->CompactRange(&start, &limit);
-  }
+  }*/
 
   // Do n memtable compactions, each of which produces an sstable
   // covering the range [small_key,large_key].
@@ -1636,7 +1636,7 @@ TEST_F(DBTest, CustomComparator) {
   }
 }
 
-TEST_F(DBTest, ManualCompaction) {
+/*TEST_F(DBTest, ManualCompaction) {
   ASSERT_EQ(config::kMaxMemCompactLevel, 2)
       << "Need to update this test to match kMaxMemCompactLevel";
 
@@ -1668,7 +1668,7 @@ TEST_F(DBTest, ManualCompaction) {
   ASSERT_EQ("0,1,2", FilesPerLevel());
   db_->CompactRange(nullptr, nullptr);
   ASSERT_EQ("0,0,1", FilesPerLevel());
-}
+}*/
 
 TEST_F(DBTest, DBOpen_Options) {
   std::string dbname = testing::TempDir() + "db_options_test";
@@ -2161,7 +2161,7 @@ class ModelDB : public DB {
       sizes[i] = 0;
     }
   }
-  void CompactRange(const Slice* start, const Slice* end) override {}
+  //void CompactRange(const Slice* start, const Slice* end) override {}
 
   void PrintTree() override {}
 

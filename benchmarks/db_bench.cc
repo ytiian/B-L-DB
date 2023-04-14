@@ -571,9 +571,9 @@ class Benchmark {
       } else if (name == Slice("readwhilewriting")) {
         num_threads++;  // Add extra thread for writing
         method = &Benchmark::ReadWhileWriting;
-      } else if (name == Slice("compact")) {
-        method = &Benchmark::Compact;
-      } else if (name == Slice("crc32c")) {
+      } //else if (name == Slice("compact")) {
+        //method = &Benchmark::Compact;
+      /*}*/ else if (name == Slice("crc32c")) {
         method = &Benchmark::Crc32c;
       } else if (name == Slice("snappycomp")) {
         method = &Benchmark::SnappyCompress;
@@ -828,7 +828,10 @@ class Benchmark {
   }
 
   void ReadSequential(ThreadState* thread) {
+    double begin = g_env->NowMicros();
     Iterator* iter = db_->NewIterator(ReadOptions());
+    double end = g_env->NowMicros();
+    std::cout<<"Iter:"<<end-begin<<"micros"<<std::endl;
     int i = 0;
     int64_t bytes = 0;
     for (iter->SeekToFirst(); i < reads_ && iter->Valid(); iter->Next()) {
@@ -990,7 +993,7 @@ class Benchmark {
     }
   }
 
-  void Compact(ThreadState* thread) { db_->CompactRange(nullptr, nullptr); }
+  //void Compact(ThreadState* thread) { db_->CompactRange(nullptr, nullptr); }
 
   void PrintStats(const char* key) {
     std::string stats;

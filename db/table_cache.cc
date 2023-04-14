@@ -82,6 +82,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       tf->table = table;
       *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
     }
+    //std::cout<<"Not Hit"<<std::endl;
   }
   return s;
 }

@@ -5,19 +5,27 @@
 #include <vector>
 #include <utility>
 #include <iostream>
+#include "version_edit.h"
 
 namespace leveldb{
 
-class SortedRun{//结构1
+/*class SortedRun{//结构1
  public:
+  SortedRun(){}
+
   SortedRun(uint64_t id, int level):id_(id),
                               level_(level),
                               next_(nullptr),
                               ref_(0),
-                              contain_file_(new std::vector<uint64_t>){}
+                              contain_file_(new std::vector<FileMetaData*>),
+                              run_to_L0_file_(new std::vector<uint64_t>){}
 
-  void InsertContainFile(uint64_t file_number){
-    contain_file_->push_back(file_number);
+  void InsertContainFile(FileMetaData* file){
+    contain_file_->push_back(file);
+  }
+
+  void InsertL0File(uint64_t file){
+    run_to_L0_file_->push_back(file);
   }
 
   void UpdateNext(SortedRun* new_run){
@@ -36,50 +44,34 @@ class SortedRun{//结构1
     return id_;
   }
 
-  std::vector<uint64_t>* GetContainFile(){
+  std::vector<FileMetaData*>* GetContainFile(){
     return contain_file_;
   }
 
-  void Ref(){
-    ref_++;
+  std::vector<uint64_t>* GetRunToL0() {
+    return run_to_L0_file_;
   }
 
-  void UnRef(){
-    ref_--;
-    if(ref_ <= 0){
-      delete this;
-    }
-  }
+  int ref_;
 
  protected:
   uint64_t id_;
   int level_;
-  std::vector<uint64_t>* contain_file_;
+  std::vector<FileMetaData*>* contain_file_;
+  std::vector<uint64_t>* run_to_L0_file_;
   SortedRun* next_;//结构3
-  int ref_;
-};
+};*/
 
-class RunManager{
+/*class RunManager{
  public:
   RunManager():next_run_number_(1){}
-
-  SortedRun* NewRun(int level){
-    SortedRun* new_run = new SortedRun(next_run_number_, level);//只能被delete释放
-    next_run_number_++;
-    return new_run;
-  }
-
-  void InsertFileToRun(uint64_t L0_file, SortedRun* run){
-    L0_file_to_run.insert(std::pair<uint64_t, SortedRun*>(L0_file, run));
-    run->Ref();
-  }
 
   //外部调用
   //SortedRun* final_run
   //FindFinalRun(L0_file, final_run)
-  bool FindFinalRun(uint64_t L0_file, SortedRun** final_run){
+  bool FindFinalRun(FileMetaData* L0_file, SortedRun** final_run){
     SortedRun* tmp_run = nullptr;
-    std::unordered_map<uint64_t, SortedRun*>::iterator it = L0_file_to_run.find(L0_file);
+    std::unordered_map<FileMetaData*, SortedRun*>::iterator it = L0_file_to_run.find(L0_file);
     if(it == L0_file_to_run.end()){
       return false;//该L0文件还存在
     }else{
@@ -100,9 +92,9 @@ class RunManager{
   }
 
  protected:
-  std::unordered_map<uint64_t, SortedRun*> L0_file_to_run;
+  std::unordered_map<FileMetaData*, SortedRun*> L0_file_to_run;
   uint64_t next_run_number_;//下一个run分配的id
-};
+};*/
 
 }
 

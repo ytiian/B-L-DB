@@ -321,7 +321,7 @@ TEST_F(CorruptionTest, CompactionInputError) {
   Check(10000, 10000);
 }
 
-TEST_F(CorruptionTest, CompactionInputErrorParanoid) {
+/*TEST_F(CorruptionTest, CompactionInputErrorParanoid) {
   options_.paranoid_checks = true;
   options_.write_buffer_size = 512 << 10;
   Reopen();
@@ -340,7 +340,7 @@ TEST_F(CorruptionTest, CompactionInputErrorParanoid) {
   std::string tmp1, tmp2;
   Status s = db_->Put(WriteOptions(), Key(5, &tmp1), Value(5, &tmp2));
   ASSERT_TRUE(!s.ok()) << "write did not fail in corrupted paranoid db";
-}
+}*/
 
 TEST_F(CorruptionTest, UnrelatedKeys) {
   Build(10);

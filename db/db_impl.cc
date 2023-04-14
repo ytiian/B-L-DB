@@ -154,7 +154,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-                                btree = new VanillaBPlusTree<std::string, uint32_t>(options_.bTree_capacity);
+                                btree = new VanillaBPlusTree<std::string, uint64_t>(options_.bTree_capacity);
                                }
 
 DBImpl::~DBImpl() {
@@ -248,6 +248,7 @@ void DBImpl::RemoveObsoleteFiles() {
 
   // Make a set of all of the live files
   //还不能被删除的文件
+  //pending_outputs_正在生成中，还没加入Version的文件，也不能删除
   std::set<uint64_t> live = pending_outputs_;
   versions_->AddLiveFiles(&live);
   //获得dbname路径下的文件列表
@@ -291,6 +292,7 @@ void DBImpl::RemoveObsoleteFiles() {
         if (type == kTableFile) {
           //要删除了因此从table cache中驱逐
           table_cache_->Evict(number);
+          //std::cout<<"Evict"<<std::endl;
         }
         Log(options_.info_log, "Delete type=%d #%lld\n", static_cast<int>(type),
             static_cast<unsigned long long>(number));
@@ -390,6 +392,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // Recover in the order in which the logs were generated
   std::sort(logs.begin(), logs.end());
   for (size_t i = 0; i < logs.size(); i++) {
+    //WAL->Memtable
     s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit,
                        &max_sequence);
     if (!s.ok()) {
@@ -548,6 +551,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   FileMetaData meta;
   meta.number = versions_->NewFileNumber();
   //compaction的输出文件
+  //防止被删除
+  //正在生成中，还没加入Version的文件，也不能删除
   pending_outputs_.insert(meta.number);
   Iterator* iter = mem->NewIterator();
   Log(options_.info_log, "Level-0 table #%llu: started",
@@ -566,22 +571,27 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
       (unsigned long long)meta.number, (unsigned long long)meta.file_size,
       s.ToString().c_str());
   delete iter;
+  //已经加入version，可以移除出pending_outputs_
   pending_outputs_.erase(meta.number);
 
   // Note that if file_size is zero, the file has been deleted and
   // should not be added to the manifest.
   int level = 0;
   if (s.ok() && meta.file_size > 0) {
-    const Slice min_user_key = meta.smallest.user_key();
-    const Slice max_user_key = meta.largest.user_key();
+    //const Slice min_user_key = meta.smallest.user_key();
+    //const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
       //如果base不为空，则挑选flush放置的层
-      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
+      //level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
     }
     //为空，说明是recover阶段的flush
-    //更新edit，相当于把文件放置在L0层
-    edit->AddFile(level, meta.number, meta.file_size, meta.smallest,
+    //更新edit，把文件放置在L0层
+    edit->SetLevel(-1, 0);
+    SortedRun run= versions_->NewRun(0);
+    edit->AddRun(run);
+    edit->AddFileToRun(meta.number, meta.file_size, meta.smallest,
                   meta.largest);
+                  //只到把新run加入edit为止（L0到run的map未更改）
   }
 
   CompactionStats stats;
@@ -629,7 +639,7 @@ void DBImpl::CompactMemTable() {
 }
 
 //CompactionRange？
-void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
+/*void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
   int max_level_with_files = 1;
   {
     MutexLock l(&mutex_);
@@ -644,9 +654,9 @@ void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
   for (int level = 0; level < max_level_with_files; level++) {
     TEST_CompactRange(level, begin, end);
   }
-}
+}*/
 
-void DBImpl::TEST_CompactRange(int level, const Slice* begin,
+/*void DBImpl::TEST_CompactRange(int level, const Slice* begin,
                                const Slice* end) {
   assert(level >= 0);
   assert(level + 1 < config::kNumLevels);
@@ -683,7 +693,7 @@ void DBImpl::TEST_CompactRange(int level, const Slice* begin,
     // Cancel my manual compaction since we aborted early for some reason.
     manual_compaction_ = nullptr;
   }
-}
+}*/
 
 Status DBImpl::TEST_CompactMemTable() {
   // nullptr batch means just wait for earlier writes to be done
@@ -711,18 +721,24 @@ void DBImpl::RecordBackgroundError(const Status& s) {
 }
 
 void DBImpl::MaybeScheduleCompaction() {
+  //std::cout<<"schedule"<<std::endl;
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
     // Already scheduled
+    //std::cout<<"1"<<std::endl;
   } else if (shutting_down_.load(std::memory_order_acquire)) {
     // DB is being deleted; no more background compactions
+    //std::cout<<"2"<<std::endl;
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
+    //std::cout<<"3"<<std::endl;
   } else if (imm_ == nullptr && manual_compaction_ == nullptr &&
              !versions_->NeedsCompaction()) {
     // No work to be done
+    //std::cout<<"4"<<std::endl;
   } else {
     //开始compaction调度
+    //std::cout<<"5"<<std::endl;
     background_compaction_scheduled_ = true;
     env_->Schedule(&DBImpl::BGWork, this);
   }
@@ -765,7 +781,7 @@ void DBImpl::BackgroundCompaction() {
 
   Compaction* c;
   //手动？
-  bool is_manual = (manual_compaction_ != nullptr);
+  /*bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
@@ -779,34 +795,14 @@ void DBImpl::BackgroundCompaction() {
         m->level, (m->begin ? m->begin->DebugString().c_str() : "(begin)"),
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
-  } else {
+  }*/// else {
     //非手动
     c = versions_->PickCompaction();
-  }
+  //}
 
   Status status;
   if (c == nullptr) {
     // Nothing to do
-  } else if (!is_manual && c->IsTrivialMove()) {
-    // Move file to next level
-    assert(c->num_input_files(0) == 1);
-    FileMetaData* f = c->input(0, 0);
-    //那一个文件简单地移动到下一层
-    c->edit()->RemoveFile(c->level(), f->number);
-    c->edit()->AddFile(c->level() + 1, f->number, f->file_size, f->smallest,
-                       f->largest);
-    //每次compaction会产生新edit
-    //记录edit
-    //应用edit生成新Version                   
-    status = versions_->LogAndApply(c->edit(), &mutex_);
-    if (!status.ok()) {
-      RecordBackgroundError(status);
-    }
-    VersionSet::LevelSummaryStorage tmp;
-    Log(options_.info_log, "Moved #%lld to level-%d %lld bytes %s: %s\n",
-        static_cast<unsigned long long>(f->number), c->level() + 1,
-        static_cast<unsigned long long>(f->file_size),
-        status.ToString().c_str(), versions_->LevelSummary(&tmp));
   } else {
     //普通的compaction
     CompactionState* compact = new CompactionState(c);
@@ -817,6 +813,7 @@ void DBImpl::BackgroundCompaction() {
     CleanupCompaction(compact);
     c->ReleaseInputs();
     RemoveObsoleteFiles();
+    //std::cout<<"compact"<<std::endl;
   }
   delete c;
 
@@ -829,7 +826,7 @@ void DBImpl::BackgroundCompaction() {
   }
 
   //手动compaction
-  if (is_manual) {
+  /*if (is_manual) {
     ManualCompaction* m = manual_compaction_;
     if (!status.ok()) {
       m->done = true;
@@ -841,7 +838,7 @@ void DBImpl::BackgroundCompaction() {
       m->begin = &m->tmp_storage;
     }
     manual_compaction_ = nullptr;
-  }
+  }*/
 }
 
 void DBImpl::CleanupCompaction(CompactionState* compact) {
@@ -942,20 +939,28 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
 //最后调用LogAndApply
 Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   mutex_.AssertHeld();
-  Log(options_.info_log, "Compacted %d@%d + %d@%d files => %lld bytes",
-      compact->compaction->num_input_files(0), compact->compaction->level(),
-      compact->compaction->num_input_files(1), compact->compaction->level() + 1,
+  Log(options_.info_log, "Compacted %d@%d files => %lld bytes",
+      compact->compaction->num_input_files(), compact->compaction->level(),
       static_cast<long long>(compact->total_bytes));
 
   // Add compaction outputs
   //Compaction的输入文件都要被删除，写入edit
-  compact->compaction->AddInputDeletions(compact->compaction->edit());
-  const int level = compact->compaction->level();
+  //compact->compaction->AddInputDeletions(compact->compaction->edit());
+  //记录待删除的Run
+  compact->compaction->AddRunDeletions(compact->compaction->edit());
+  const int input_level = compact->compaction->level();
+  const int output_level = input_level == config::kNumLevels ? input_level : input_level + 1;
+  //在edit中记录新生成了一个run
+  compact->compaction->edit()->SetLevel(input_level, output_level);
+  SortedRun run = versions_->NewRun(output_level);
+  compact->compaction->edit()->AddRun(run);
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
     //compaction的输出文件加入edit
-    compact->compaction->edit()->AddFile(level + 1, out.number, out.file_size,
-                                         out.smallest, out.largest);
+    compact->compaction->edit()->AddFileToRun(out.number, out.file_size, out.smallest, out.largest);
+    //compact->compaction->edit()->AddFile(level + 1, out.number, out.file_size,
+                                         //out.smallest, out.largest);
+
   }
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
@@ -965,10 +970,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
 
-  Log(options_.info_log, "Compacting %d@%d + %d@%d files",
-      compact->compaction->num_input_files(0), compact->compaction->level(),
-      compact->compaction->num_input_files(1),
-      compact->compaction->level() + 1);
+  Log(options_.info_log, "Compacting %d@%d files",
+      compact->compaction->num_input_files(), compact->compaction->level());
 
   assert(versions_->NumLevelFiles(compact->compaction->level()) > 0);
   assert(compact->builder == nullptr);
@@ -1011,8 +1014,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       imm_micros += (env_->NowMicros() - imm_start);
     }
 
+    //删除重叠太多的判断，只当sstable超过阈值时才重启新文件
     Slice key = input->key();
-    if (compact->compaction->ShouldStopBefore(key) &&
+    /*if (compact->compaction->ShouldStopBefore(key) &&
         compact->builder != nullptr) {
       //检查当前输出文件是否与level+2层文件有过多冲突，如果是就要完成当前输出文件
       //并产生新的输出文件
@@ -1020,7 +1024,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       if (!status.ok()) {
         break;
       }
-    }
+    }*/
 
     // Handle key/value, add to state, etc.
     //是否可以丢弃当前kv对
@@ -1122,11 +1126,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
 
   CompactionStats stats;
   stats.micros = env_->NowMicros() - start_micros - imm_micros;
-  for (int which = 0; which < 2; which++) {
-    for (int i = 0; i < compact->compaction->num_input_files(which); i++) {
-      stats.bytes_read += compact->compaction->input(which, i)->file_size;
-    }
+
+  for (int i = 0; i < compact->compaction->num_input_files(); i++) {
+    stats.bytes_read += compact->compaction->input(i)->file_size;
   }
+
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     stats.bytes_written += compact->outputs[i].file_size;
   }
@@ -1184,6 +1188,7 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
     imm_->Ref();
   }
   versions_->current()->AddIterators(options, &list);
+  //versions_->current()->AddRunsIterators(options, &list, )
   Iterator* internal_iter =
       NewMergingIterator(&internal_comparator_, &list[0], list.size());
   versions_->current()->Ref();
@@ -1243,16 +1248,19 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
       // Done
     } else {
       //到磁盘上寻找
-      s = current->Get(options, lkey, value, &stats);
+      uint64_t L0_id = 0;
+      btree->search(key.ToString(), L0_id);
+      //std::cout<<L0_id<<std::endl;
+      s = current->Get(options, lkey, value, &stats, L0_id);
       have_stat_update = true;
     }
     mutex_.Lock();
   }
 
   //？seek也会触发compaction
-  if (have_stat_update && current->UpdateStats(stats)) {
+  /*if (have_stat_update && current->UpdateStats(stats)) {
     MaybeScheduleCompaction();
-  }
+  }*/
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();

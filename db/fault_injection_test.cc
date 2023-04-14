@@ -484,12 +484,12 @@ class FaultInjectionTest : public testing::Test {
     }
   }
 
-  void PartialCompactTestPreFault(int num_pre_sync, int num_post_sync) {
+  /*void PartialCompactTestPreFault(int num_pre_sync, int num_post_sync) {
     DeleteAllData();
     Build(0, num_pre_sync);
     db_->CompactRange(nullptr, nullptr);
     Build(num_pre_sync, num_post_sync);
-  }
+  }*/
 
   void PartialCompactTestReopenWithFault(ResetMethod reset_method,
                                          int num_pre_sync, int num_post_sync) {

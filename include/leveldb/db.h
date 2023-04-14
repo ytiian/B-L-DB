@@ -145,7 +145,7 @@ class LEVELDB_EXPORT DB {
   // end==nullptr is treated as a key after all keys in the database.
   // Therefore the following call will compact the entire database:
   //    db->CompactRange(nullptr, nullptr);
-  virtual void CompactRange(const Slice* begin, const Slice* end) = 0;
+  //virtual void CompactRange(const Slice* begin, const Slice* end) = 0;
 
   virtual void PrintTree() = 0;
 };

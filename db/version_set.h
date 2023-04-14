@@ -27,6 +27,7 @@
 
 #include "db/dbformat.h"
 #include "db/version_edit.h"
+#include "db/run_manager.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
 
@@ -48,6 +49,8 @@ class WritableFile;
 // Return the smallest index i such that files[i]->largest >= key.
 // Return files.size() if there is no such file.
 // REQUIRES: "files" contains a sorted list of non-overlapping files.
+// 找到key落在哪个文件
+// *不需要修改
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files, const Slice& key);
 
@@ -58,9 +61,10 @@ int FindFile(const InternalKeyComparator& icmp,
 // largest==nullptr represents a key largest than all keys in the DB.
 // REQUIRES: If disjoint_sorted_files, files[] contains disjoint ranges
 //           in sorted order.
+//*不需要修改
 bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            bool disjoint_sorted_files,
-                           const std::vector<FileMetaData*>& files,
+                           const std::vector<SortedRun*>& runs,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
@@ -74,13 +78,15 @@ class Version {
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
+  //*用于构建全局的迭代器，不需要修改
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
+  // ******路径改变，需要修改****
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
-             GetStats* stats);
+             GetStats* stats, uint64_t L0_id);
 
   // Adds "stats" into the current state.  Returns true if a new
   // compaction may need to be triggered, false otherwise.
@@ -95,6 +101,8 @@ class Version {
 
   // Reference count management (so Versions do not disappear out from
   // under live iterators)
+  //Version需要引用计数
+  //当被iter使用时Version不能释放
   void Ref();
   void Unref();
 
@@ -115,13 +123,15 @@ class Version {
 
   // Return the level at which we should place a new memtable compaction
   // result that covers the range [smallest_user_key,largest_user_key].
-  int PickLevelForMemTableOutput(const Slice& smallest_user_key,
-                                 const Slice& largest_user_key);
+  //int PickLevelForMemTableOutput(const Slice& smallest_user_key,
+  //                               const Slice& largest_user_key);
 
-  int NumFiles(int level) const { return files_[level].size(); }
+  //int NumFiles(int level) const { return files_[level].size(); }
 
   // Return a human readable string that describes this version's contents.
   std::string DebugString() const;
+
+  SortedRun* GetMapRun(uint64_t id);
 
  private:
   friend class Compaction;
@@ -144,14 +154,14 @@ class Version {
 
   ~Version();
 
-  Iterator* NewConcatenatingIterator(const ReadOptions&, int level) const;
+  Iterator* NewConcatenatingIterator(const ReadOptions&, const std::vector<FileMetaData*>* flist) const;
 
   // Call func(arg, level, f) for every file that overlaps user_key in
   // order from newest to oldest.  If an invocation of func returns
   // false, makes no more calls.
   //
   // REQUIRES: user portion of internal_key == user_key.
-  void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
+  void ForEachOverlapping(SortedRun* search_run, Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
   VersionSet* vset_;  // VersionSet to which this Version belongs
@@ -160,8 +170,10 @@ class Version {
   int refs_;          // Number of live refs to this version
 
   // List of files per level
+  //需要删除
   std::vector<FileMetaData*> files_[config::kNumLevels];
-
+  std::vector<SortedRun*> runs_[config::kNumLevels];
+  std::unordered_map<uint64_t, SortedRun*> L0_file_to_run_;
   // Next file to compact based on seek stats.
   FileMetaData* file_to_compact_;
   int file_to_compact_level_;
@@ -202,6 +214,9 @@ class VersionSet {
   // Allocate and return a new file number
   uint64_t NewFileNumber() { return next_file_number_++; }
 
+  uint64_t NewRunNumber() { return next_run_number_++; }
+
+  SortedRun NewRun(int level){ return SortedRun(NewRunNumber(), level);}
   // Arrange to reuse "file_number" unless a newer file number has
   // already been allocated.
   // REQUIRES: "file_number" was returned by a call to NewFileNumber().
@@ -246,8 +261,8 @@ class VersionSet {
   // the specified level.  Returns nullptr if there is nothing in that
   // level that overlaps the specified range.  Caller should delete
   // the result.
-  Compaction* CompactRange(int level, const InternalKey* begin,
-                           const InternalKey* end);
+  /*Compaction* CompactRange(int level, const InternalKey* begin,
+                           const InternalKey* end);*/
 
   // Return the maximum overlapping data (in bytes) at next level for any
   // file at a level >= 1.
@@ -260,6 +275,7 @@ class VersionSet {
   // Returns true iff some level needs a compaction.
   bool NeedsCompaction() const {
     Version* v = current_;
+    //std::cout<<v->compaction_score_<<std::endl;
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
   }
 
@@ -285,6 +301,8 @@ class VersionSet {
   friend class Version;
 
   bool ReuseManifest(const std::string& dscname, const std::string& dscbase);
+
+  int GetTieredTriggerNum(int level);
 
   void Finalize(Version* v);
 
@@ -322,9 +340,12 @@ class VersionSet {
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
   std::string compact_pointer_[config::kNumLevels];
+
+  uint64_t next_run_number_;
 };
 
 // A Compaction encapsulates information about a compaction.
+//一次compaction的相关信息
 class Compaction {
  public:
   ~Compaction();
@@ -335,35 +356,46 @@ class Compaction {
 
   // Return the object that holds the edits to the descriptor done
   // by this compaction.
+  //一个compaction和一个edit相关联，记录compaction之后LSM结构的变化
   VersionEdit* edit() { return &edit_; }
 
   // "which" must be either 0 or 1
-  int num_input_files(int which) const { return inputs_[which].size(); }
+  //修改
+  int num_input_files() const { return inputs_.size(); }
 
   // Return the ith input file at "level()+which" ("which" must be 0 or 1).
-  FileMetaData* input(int which, int i) const { return inputs_[which][i]; }
+  //修改
+  FileMetaData* input(int i) const { return inputs_[i]; }
 
   // Maximum size of files to build during this compaction.
+  //限制输出的table的大小
   uint64_t MaxOutputFileSize() const { return max_output_file_size_; }
 
   // Is this a trivial compaction that can be implemented by just
   // moving a single input file to the next level (no merging or splitting)
+  //只是简单移动文件
+  //待修改：暂时不用这个函数
   bool IsTrivialMove() const;
 
   // Add all inputs to this compaction as delete operations to *edit.
+  // 向edit中记录要被删除的文件
   void AddInputDeletions(VersionEdit* edit);
 
+  void AddRunDeletions(VersionEdit* edit);
   // Returns true if the information we have available guarantees that
   // the compaction is producing data in "level+1" for which no data exists
   // in levels greater than "level+1".
+  // 待修改：暂时不用这个函数
   bool IsBaseLevelForKey(const Slice& user_key);
 
   // Returns true iff we should stop building the current output
   // before processing "internal_key".
+  // 需要新建sstable
   bool ShouldStopBefore(const Slice& internal_key);
 
   // Release the input version for the compaction, once the compaction
   // is successful.
+  // 减少对input_的引用
   void ReleaseInputs();
 
  private:
@@ -378,7 +410,8 @@ class Compaction {
   VersionEdit edit_;
 
   // Each compaction reads inputs from "level_" and "level_+1"
-  std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
+  std::vector<FileMetaData*> inputs_;  // The two sets of inputs
+  std::vector<SortedRun*> inputs_runs_; 
 
   // State used to check for number of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
@@ -395,6 +428,8 @@ class Compaction {
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
   size_t level_ptrs_[config::kNumLevels];
+
+  bool last_level_;
 };
 
 }  // namespace leveldb

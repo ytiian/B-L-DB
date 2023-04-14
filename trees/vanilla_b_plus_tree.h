@@ -89,6 +89,7 @@ public:
                                                                    upper_bound_(false) {};
         Iterator(LeafNode<K, V> *leaf_node, int offset, K key_high): leaf_node_(leaf_node), offset_(offset),
                                                                    upper_bound_(true), key_high_(key_high) {};
+        
         virtual bool next(K & key, V & val) {
             if (!leaf_node_)
                 return false;
