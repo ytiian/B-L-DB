@@ -85,6 +85,10 @@ public:
 
     virtual Node* get_leftmost_leaf_node() = 0;
 
+    virtual Node* get_rightmost_leaf_node() = 0;
+
+    virtual bool FirstNode(Node* &child) = 0;
+
     virtual bool locate_key(const K &key, Node* &child, int &offset) = 0;
 
     int get_capacity(){

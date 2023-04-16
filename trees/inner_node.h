@@ -72,6 +72,11 @@ public:
     }
 
     //？
+    bool FirstNode(Node<K, V>* &child){
+        Node<K, V>* targeNode = child_[0];
+        return targeNode->FirstNode(child);
+    }
+
     bool locate_key(const K &k, Node<K, V>* &child, int &index) {
         index = locate_child_index(k);
         if (index < 0) return false;
@@ -320,6 +325,10 @@ public:
 
     Node<K, V>* get_leftmost_leaf_node() {
         return child_[0]->get_leftmost_leaf_node();
+    }
+
+    Node<K, V>* get_rightmost_leaf_node(){
+        return child_[size_-1]->get_rightmost_leaf_node();
     }
 
     std::string toString() const {

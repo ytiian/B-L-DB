@@ -35,7 +35,7 @@ class LeafNode : public Node<K, V> {
 
 public:
 
-    LeafNode(int capacity) : size_(0), right_sibling_(0) {
+    LeafNode(int capacity) : size_(0), right_sibling_(0), left_sibling_(0) {
         this->capacity_ = capacity;
  
     };
@@ -111,6 +111,10 @@ public:
             //重建指针
             right->right_sibling_ = left->right_sibling_;
             left->right_sibling_ = right;
+            if(right->right_sibling_ != 0){
+                right->right_sibling_->left_sibling_ = right;
+            }
+            right->left_sibling_ = left;
 
             // move entries to the right node
             for (int i = entry_index_for_right_node, j = 0; i < this->capacity_; ++i, ++j) {
@@ -143,6 +147,11 @@ public:
         if (found)
             v = entries_[position].val;
         return found;
+    }
+
+    bool FirstNode(Node<K, V>* &child){
+        child = this;
+        return true;
     }
 
     bool locate_key(const K &k, Node<K, V>* &child, int &position) {
@@ -274,6 +283,9 @@ public:
         this->size_ += right->size_;
         right->size_ = 0;
         this->right_sibling_ = right->right_sibling_;
+        if(this->right_sibling_ != 0){
+            this->right_sibling_->left_sibling_ = this;
+        }
 
         // delete the right
         delete right;
@@ -281,6 +293,10 @@ public:
     }
 
     virtual Node<K, V>* get_leftmost_leaf_node() {
+        return this;
+    }
+
+    virtual Node<K, V>* get_rightmost_leaf_node(){
         return this;
     }
 
@@ -338,6 +354,7 @@ private:
     Entry entries_[100];
     int size_;
     LeafNode* right_sibling_;
+    LeafNode* left_sibling_;
 
 };
 

@@ -79,7 +79,7 @@ class Version {
   // yield the contents of this Version when merged together.
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   //*用于构建全局的迭代器，不需要修改
-  void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
+  void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters, std::unordered_map<uint64_t, int>* index_map);
 
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.

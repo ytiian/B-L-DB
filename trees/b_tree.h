@@ -17,10 +17,30 @@ public:
     virtual void clear() = 0;
     class Iterator {
     public:
+        virtual bool Valid() = 0;
+
         virtual bool next(K & key, V & val) {
             return false;
         };
-    };
-    virtual Iterator* range_search(const K & key_low, const K & key_high) = 0;
+
+        virtual void SeekToFirst() = 0;
+
+        virtual void SeekToLast() = 0;
+
+        virtual K Key() = 0;
+        
+        virtual V Value() = 0;
+
+        virtual void Next() = 0;
+
+        virtual void Prev() = 0;
+
+        virtual void Seek(K key) = 0;
+
+        virtual void SetForward(bool flag) = 0;
+
+        virtual bool GetForward() = 0;
+    }; 
+    //virtual Iterator* range_search(const K & key_low, const K & key_high) = 0;
 };
 #endif //B_TREE_B_TREE_H

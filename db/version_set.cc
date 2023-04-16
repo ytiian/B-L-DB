@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <unordered_map>
 
 #include "db/run_manager.h"
 #include "db/filename.h"
@@ -301,16 +302,25 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
 
 //构建一个整体的迭代器组
 void Version::AddIterators(const ReadOptions& options,
-                           std::vector<Iterator*>* iters) {
+                           std::vector<Iterator*>* iters, std::unordered_map<uint64_t, int>* index_map) {
   // Merge all level zero files together since they may overlap
   //对于L0层的所有文件，每个文件上创建一个迭代器
   //迭代的是index block上的内容，每个条目对于一个data block
+  int index = iters->size();
   for(size_t i = 0; i < config::kNumLevels; i++){//对每层
     for(size_t j = 0; j < runs_[i].size(); j++){//对第i层的第j个run
       std::vector<FileMetaData*>* files = runs_[i][j]->GetContainFile();
+      std::vector<uint64_t>* L0 = runs_[i][j]->GetRunToL0();
+      for(int k = 0; k < L0->size(); k++){
+        //std::cout<<L0->at(k)<<" "<<index<<std::endl;
+        index_map->insert(std::make_pair(L0->at(k), index));
+      }
       if(i == 0){
         assert(files->size() == 1);
+        //std::cout<<"L0 conatain:"<<files->at(0)->number<<" index:"<<index<<std::endl;
         iters->push_back(vset_->table_cache_->NewIterator(options, files->at(0)->number, files->at(0)->file_size));
+        //std::cout<<"itersize:"<<iters->size()<<" "<<index<<std::endl;
+        index++;
         /*for(size_t fno = 0; fno < files->size(); fno++){//对每个run的每个file
           FileMetaData* file = files->at(fno);
           iters->push_back(vset_->table_cache_->NewIterator(options, file->number, file->file_size));
@@ -318,6 +328,7 @@ void Version::AddIterators(const ReadOptions& options,
       }else{
         if(!files->empty()){
           iters->push_back(NewConcatenatingIterator(options, files));
+          index++;
         }
       }
     }

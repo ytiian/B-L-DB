@@ -1181,16 +1181,18 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
 
   // Collect together all needed child iterators
   std::vector<Iterator*> list;
+  std::unordered_map<uint64_t, int>* index_map = new std::unordered_map<uint64_t, int>();
   list.push_back(mem_->NewIterator());
   mem_->Ref();
   if (imm_ != nullptr) {
     list.push_back(imm_->NewIterator());
     imm_->Ref();
   }
-  versions_->current()->AddIterators(options, &list);
+  int mem_num = list.size();
+  versions_->current()->AddIterators(options, &list, index_map);
   //versions_->current()->AddRunsIterators(options, &list, )
   Iterator* internal_iter =
-      NewMergingIterator(&internal_comparator_, &list[0], list.size());
+      NewMergingIterator(&internal_comparator_, &list[0], list.size(), btree, index_map, mem_num);
   versions_->current()->Ref();
 
   IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
