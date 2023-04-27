@@ -95,7 +95,7 @@ void VersionEdit::EncodeTo(std::string* dst) const {
     for(const auto& deleted_map_kvp : deleted_map_){
       PutVarint32(dst, kDeletedMap);
       PutVarint64(dst, deleted_map_kvp.first);
-      PutVarint32(dst, deleted_map_.size());
+      PutVarint32(dst, deleted_map_kvp.second.size());
       const auto& number = deleted_map_kvp.second;
       for(const auto& n : number){
         PutVarint64(dst, n);
@@ -163,6 +163,7 @@ void VersionEdit::EncodeRun(std::string* dst, const SortedRun& run) const{
   PutVarint64(dst, run.GetID());
   PutVarint32(dst, run.GetLevel());
   PutVarint32(dst, files->size());
+  //std::cout<<"file->size():"<<files->size()<<std::endl;
   for(size_t j = 0; j < files->size(); j++){
     const FileMetaData& f = *(files->at(j));
     PutVarint32(dst, run.GetLevel());  // level
@@ -173,6 +174,7 @@ void VersionEdit::EncodeRun(std::string* dst, const SortedRun& run) const{
   }
   std::vector<uint64_t>* L0 = run.GetRunToL0();
   PutVarint32(dst, L0->size());
+  //std::cout<<"L0->size()"<<L0->size()<<std::endl;
   for(size_t j = 0; j < L0->size(); j++){
     PutVarint64(dst, L0->at(j));
   } 
@@ -181,16 +183,24 @@ void VersionEdit::EncodeRun(std::string* dst, const SortedRun& run) const{
 bool VersionEdit::DecodeRun(Slice* input, SortedRun* run){
   const char* msg = nullptr;
   uint64_t id;
-  GetVarint64(input, &id);
-  uint32_t l;
-  GetVarint32(input, &l);
-  int level = l;
-  uint32_t file_num;
-  GetVarint32(input, &file_num);
-  uint32_t file_level;
+  if(!GetVarint64(input, &id)){
+    std::cout<<"id wrong"<<std::endl;
+  }
+  run->SetId(id);
+  int level;
+  if(!GetLevel(input, &level)){
+    std::cout<<"level wrong"<<std::endl;    
+  }
+  run->SetLevel(level);
+  uint32_t file_num;//包含的文件数
+  if(!GetVarint32(input, &file_num)){
+    std::cout<<"file num wrong"<<std::endl;     
+  }
+  int file_level;
   FileMetaData f;
+  //std::cout<<"file_num:"<<file_num<<std::endl;
   for(size_t i = 0; i < file_num; i++){
-    if (GetLevel(input, &level) && GetVarint64(input, &f.number) &&
+    if (GetLevel(input, &file_level) && GetVarint64(input, &f.number) &&
         GetVarint64(input, &f.file_size) &&
         GetInternalKey(input, &f.smallest) &&
         GetInternalKey(input, &f.largest)) {
@@ -198,11 +208,20 @@ bool VersionEdit::DecodeRun(Slice* input, SortedRun* run){
         run->InsertContainFile(file);
     } else {
       msg = "new-file entry";
+      std::cout<<msg<<std::endl;
     }
     if(msg != nullptr){
       return false;
     }
   } 
+  uint32_t L0_size;
+  uint64_t L0_id;
+  GetVarint32(input, &L0_size);
+  //std::cout<<"L0_size:"<<L0_size<<std::endl;
+  for(size_t i = 0; i < L0_size; i++){
+    GetVarint64(input, &L0_id);
+    run->InsertL0File(L0_id);
+  }
   return true;
 }
 
@@ -286,11 +305,17 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         break;
 
       case kSnapShotRun:
+        r.clear();
         if(DecodeRun(&input, &r)){
           snapshot_runs_.push_back(r);
         }else{
           msg = "snapshot runs";
         }
+        /*for(int i=0;i<snapshot_runs_.size();i++){
+          std::cout<<"run:"<<snapshot_runs_[i].GetID()<<std::endl;
+          std::cout<<"files:"<<(snapshot_runs_[i].GetContainFile())->size()<<std::endl;
+          std::cout<<"L0:"<<(snapshot_runs_[i].GetRunToL0())->size()<<std::endl;
+        }*/
         break;
 
       /*case kDeletedRun:
@@ -323,6 +348,7 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         break;
 
       case kNewRun:
+        r.clear();
         if(DecodeRun(&input, &r)){
           new_run_ = r;
         }else{

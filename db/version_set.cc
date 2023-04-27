@@ -393,6 +393,53 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
   return a->number > b->number;
 }
 
+
+Status Version::RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree){
+  for(int i = config::kNumLevels - 1; i >= 0; i--){
+    for(int j = 0; j < runs_[i].size(); j++){
+      const SortedRun* run = runs_[i][j];
+      std::vector<uint64_t>* run_to_L0 = runs_[i][j]->GetRunToL0();
+      std::vector<FileMetaData*>* contain_files = runs_[i][j]->GetContainFile();
+      //只保留一个run 到 L0的映射
+      uint64_t L0 = run_to_L0->at(0);
+      run_to_L0->clear();
+      run_to_L0->push_back(L0);
+      //std::cout<<"the L0:"<<L0<<std::endl;
+      Iterator* iter = NewConcatenatingIterator(ReadOptions(), contain_files);
+      for(iter->SeekToLast(); iter->Valid(); iter->Prev()){
+        ParsedInternalKey ikey;
+        Slice k = iter->key();
+        if (!ParseInternalKey(k, &ikey)) {
+          Status status = Status::Corruption("corrupted internal key in DBIter");
+          return status;
+        }
+        switch (ikey.type) {
+          case kTypeDeletion:
+            // Arrange to skip all upcoming entries for this key since
+            // they are hidden by this deletion.
+            //是否要改成0？
+            btree->insert(ikey.user_key.ToString(), L0);
+            break;
+          case kTypeValue:
+            btree->insert(ikey.user_key.ToString(), L0);
+            break;
+        }        
+      }
+    }
+  }
+}
+
+void Version::PrintMap(VanillaBPlusTree<std::string, uint64_t>* btree){
+  //std::unordered_map<uint64_t, SortedRun*> L0_file_to_run_; 
+  /*for(const auto& L0 : L0_file_to_run_){
+    std::cout<<"map contain L0:"<<L0.first<<std::endl;
+  }
+  BTree<std::string, uint64_t>::Iterator* btree_iter = btree->NewTreeIterator();
+  for(btree_iter->SeekToFirst(); btree_iter->Valid(); btree_iter->Next()){
+    std::cout<<btree_iter->Key()<<" "<<btree_iter->Value()<<std::endl;
+  }*/
+}
+
 //对每个包含use key的文件调用func函数
 void Version::ForEachOverlapping(SortedRun* search_run, Slice user_key, Slice internal_key, void* arg,
                                  bool (*func)(void*, int, FileMetaData*)) {
@@ -534,10 +581,14 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
 
   //对每个文件待查文件都调用Match函数，直到match到所查key，就停止查找过程
   if(L0_id != 0){
-    SortedRun* search_run = GetMapRun(L0_id);
-    //修改这个函数：
-    //state.found=true;
-    ForEachOverlapping(search_run, state.saver.user_key, state.ikey, &state, &State::Match);    
+    if(L0_file_to_run_.find(L0_id) == L0_file_to_run_.end()){
+      L0_id = 0;
+    }else{
+      SortedRun* search_run = GetMapRun(L0_id);
+      //修改这个函数：
+      //state.found=true;
+      ForEachOverlapping(search_run, state.saver.user_key, state.ikey, &state, &State::Match);          
+    }  
   }
 
   //SortedRun* search_run = GetMapRun(L0_id);
@@ -1243,6 +1294,13 @@ Status VersionSet::Recover(bool* save_manifest) {
         read_records, error.c_str());
   }
 
+  return s;
+}
+
+Status VersionSet::RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree){
+  Status s = current_->RebuildTree(btree);
+  //current_->PrintMap(btree);
+  //std::cout<<"print map end"<<std::endl;
   return s;
 }
 

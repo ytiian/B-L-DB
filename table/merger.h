@@ -26,11 +26,6 @@ class Iterator;
 Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
                              int n);
 
-Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
-                             int n, VanillaBPlusTree<std::string, uint64_t>* btree, 
-                             const std::unordered_map<uint64_t, int>* index_map_, int mem_num_);
-
-
 }  // namespace leveldb
 
 

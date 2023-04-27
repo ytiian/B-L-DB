@@ -34,6 +34,7 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
+#include "db/disk_iter.h"
 
 namespace leveldb {
 
@@ -154,8 +155,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-                                btree = new VanillaBPlusTree<std::string, uint64_t>(options_.bTree_capacity);
-                               }
+  btree_ = new VanillaBPlusTree<std::string, uint64_t>(options_.bTree_capacity);
+}
 
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
@@ -184,6 +185,8 @@ DBImpl::~DBImpl() {
   if (owns_cache_) {
     delete options_.block_cache;
   }
+
+  delete btree_;
 }
 
 //新建一个数据库
@@ -349,6 +352,8 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   if (!s.ok()) {
     return s;
   }
+
+  s = versions_->RebuildTree(btree_);
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -491,6 +496,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       compactions++;//统计有几块待flush的mem
       *save_manifest = true;
       status = WriteLevel0Table(mem, edit, nullptr);
+      versions_->LogAndApply(edit, &mutex_);
+      edit->Clear();
       mem->Unref();
       mem = nullptr;
       if (!status.ok()) {
@@ -563,7 +570,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     mutex_.Unlock();
     //iter构建在mem上
     //mem->sstable
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, btree);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, btree_);
     mutex_.Lock();
   }
 
@@ -1180,19 +1187,24 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   *latest_snapshot = versions_->LastSequence();
 
   // Collect together all needed child iterators
-  std::vector<Iterator*> list;
+  std::vector<Iterator*> list_all;
   std::unordered_map<uint64_t, int>* index_map = new std::unordered_map<uint64_t, int>();
-  list.push_back(mem_->NewIterator());
+  list_all.push_back(mem_->NewIterator());
   mem_->Ref();
   if (imm_ != nullptr) {
-    list.push_back(imm_->NewIterator());
+    list_all.push_back(imm_->NewIterator());
     imm_->Ref();
   }
-  int mem_num = list.size();
+  //std::cout<<"mem size:"<<list_all.size()<<std::endl;
+  std::vector<Iterator*> list;
   versions_->current()->AddIterators(options, &list, index_map);
   //versions_->current()->AddRunsIterators(options, &list, )
+  Iterator* disk_iter = 
+      NewDiskIterator(&internal_comparator_, &list[0], list.size(), btree_, index_map);
+  list_all.push_back(disk_iter);
+    //std::cout<<"all size:"<<list_all.size()<<std::endl;
   Iterator* internal_iter =
-      NewMergingIterator(&internal_comparator_, &list[0], list.size(), btree, index_map, mem_num);
+      NewMergingIterator(&internal_comparator_, &list_all[0], list_all.size());     
   versions_->current()->Ref();
 
   IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
@@ -1251,8 +1263,8 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else {
       //到磁盘上寻找
       uint64_t L0_id = 0;
-      btree->search(key.ToString(), L0_id);
-      //std::cout<<L0_id<<std::endl;
+      btree_->search(key.ToString(), L0_id);
+      //std::cout<<"key"<<key.ToString()<<"L0_id:"<<L0_id<<std::endl;
       s = current->Get(options, lkey, value, &stats, L0_id);
       have_stat_update = true;
     }
@@ -1591,7 +1603,7 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
 
 void DBImpl::PrintTree(){
   std::cout<<"print tree:"<<std::endl;
-  std::cout<<btree->toString()<<std::endl;
+  std::cout<<btree_->toString()<<std::endl;
 }
 
 // Default implementations of convenience methods that subclasses of DB

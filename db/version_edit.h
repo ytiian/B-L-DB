@@ -39,6 +39,14 @@ class SortedRun{//结构1
     contain_file_->push_back(file);
   }
 
+  void clear(){
+    id_=0;
+    level_=0;
+    ref_=0;
+    contain_file_ = new std::vector<FileMetaData*>();
+    run_to_L0_file_ = new std::vector<uint64_t>();
+  }
+
   void InsertL0File(uint64_t file){
     run_to_L0_file_->push_back(file);
   }
@@ -193,7 +201,7 @@ class VersionEdit {
   //DeletedRunSet deleted_runs_;
   uint32_t input_level_;
   uint32_t output_level_;
-  DeletedMap deleted_map_;
+  DeletedMap deleted_map_;//被删除的run所包含的L0
   //<level,file meta>
   //std::vector<FileMetaData> new_files_;
   SortedRun new_run_;

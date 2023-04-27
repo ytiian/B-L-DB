@@ -35,9 +35,11 @@ class LeafNode : public Node<K, V> {
 
 public:
 
+    //LeafNode():size_(0), right_sibling_(0), left_sibling_(0){}
+
     LeafNode(int capacity) : size_(0), right_sibling_(0), left_sibling_(0) {
         this->capacity_ = capacity;
- 
+        //std::cout<<"a new leafnode"<<std::endl;
     };
 
 
@@ -144,8 +146,12 @@ public:
         int position;
         const bool found = search_key_position(k, position);
         //找到
-        if (found)
-            v = entries_[position].val;
+        if (found){
+            v = entries_[position].val;          
+            //std::cout<<"btree_found!:"<<position<<" "<<entries_[position].val<<std::endl;
+        }
+        else
+            v = 0;
         return found;
     }
 
@@ -321,6 +327,8 @@ protected:
     bool getEntry(int i, K &k, V &v) const {
         if (i >= size_)
             return false;
+        if (i < 0)
+            return false;
         k = entries_[i].key;
         v = entries_[i].val;
         return true;
@@ -330,6 +338,7 @@ private:
 
     bool search_key_position(const K &key, int &position) const {
         int l = 0, r = size_ - 1;
+        //std::cout<<"leafnode_size:"<<size_<<std::endl;
         int m = 0;
         bool found = false;
         while (l <= r) {

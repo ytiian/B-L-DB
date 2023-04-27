@@ -53,14 +53,14 @@ static const char* FLAGS_benchmarks =
     "readrandom,"  // Extra run to allow previous compactions to quiesce
     "readseq,"
     "readreverse,"
-    "compact,"
-    "readrandom,"
-    "readseq,"
-    "readreverse,"
+    //"compact,"
+    //"readrandom,"
+    //"readseq,"
+    //"readreverse,"
     "fill100K,"
-    "crc32c,"
-    "snappycomp,"
-    "snappyuncomp,";
+    "crc32c,";
+    //"snappycomp,"
+    //"snappyuncomp,";
 
 // Number of key/values to place in database
 static int FLAGS_num = 1000000;
@@ -839,6 +839,7 @@ class Benchmark {
       thread->stats.FinishedSingleOp();
       ++i;
     }
+    std::cout<<"read:"<<i<<std::endl;
     delete iter;
     thread->stats.AddBytes(bytes);
   }

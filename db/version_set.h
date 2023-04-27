@@ -30,6 +30,7 @@
 #include "db/run_manager.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+#include "trees/vanilla_b_plus_tree.h"
 
 namespace leveldb {
 
@@ -75,12 +76,15 @@ class Version {
     int seek_file_level;
   };
 
+  Status RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree);
+
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   //*用于构建全局的迭代器，不需要修改
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters, std::unordered_map<uint64_t, int>* index_map);
 
+  void PrintMap(VanillaBPlusTree<std::string, uint64_t>* btree);
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
@@ -169,9 +173,9 @@ class Version {
   Version* prev_;     // Previous version in linked list
   int refs_;          // Number of live refs to this version
 
-  // List of files per level
-  //需要删除
+  //每层文件
   std::vector<FileMetaData*> files_[config::kNumLevels];
+  //每层的run
   std::vector<SortedRun*> runs_[config::kNumLevels];
   std::unordered_map<uint64_t, SortedRun*> L0_file_to_run_;
   // Next file to compact based on seek stats.
@@ -194,6 +198,7 @@ class VersionSet {
 
   ~VersionSet();
 
+  Status RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree);
   // Apply *edit to the current version to form a new descriptor that
   // is both saved to persistent state and installed as the new
   // current version.  Will release *mu while actually writing to the file.

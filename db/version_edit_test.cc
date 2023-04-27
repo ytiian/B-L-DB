@@ -41,7 +41,7 @@ static void TestEncodeDecode(const VersionEdit& edit) {
 TEST(VersionEditTest, SnapshotEncodeDecode){
   static const uint64_t kBig = 1ull << 50;
   VersionEdit edit;
-  SortedRun run111(1, 111);
+  SortedRun run111(111, 1);
   FileMetaData f;
   f.number = kBig + 300 + 1;
   f.file_size = kBig + 400 + 1;
@@ -51,7 +51,7 @@ TEST(VersionEditTest, SnapshotEncodeDecode){
   run111.InsertContainFile(fp);
   run111.InsertL0File(f.number);
 
-  SortedRun run21(2, 21);
+  SortedRun run21(21, 2);
   f.number = kBig + 300 + 2;
   f.file_size = kBig + 400 + 2;
   f.smallest = InternalKey("foo", kBig + 500 + 2, kTypeValue);
@@ -67,7 +67,7 @@ TEST(VersionEditTest, SnapshotEncodeDecode){
   run21.InsertL0File(f.number + 10);
   run21.InsertL0File(f.number + 11);
 
-  SortedRun run22(2, 22);
+  SortedRun run22(22, 2);
   f.number = kBig + 300 + 4;
   f.file_size = kBig + 400 + 4;
   f.smallest = InternalKey("foo", kBig + 500 + 4, kTypeValue);
@@ -79,9 +79,9 @@ TEST(VersionEditTest, SnapshotEncodeDecode){
   f.smallest = InternalKey("foo", kBig + 500 + 5, kTypeValue);
   f.largest = InternalKey("zoo", kBig + 600 + 5, kTypeDeletion);
   FileMetaData *fp5 = new FileMetaData(f);  
-  run22.InsertContainFile(fp5);   
-  run21.InsertL0File(f.number + 20);
-  run21.InsertL0File(f.number + 21);  
+  //run22.InsertContainFile(fp5);   
+  run22.InsertL0File(f.number + 20);
+  //run22.InsertL0File(f.number + 21);  
 
   edit.AddSnapshotRun(run111);
   edit.AddSnapshotRun(run21);
@@ -91,13 +91,14 @@ TEST(VersionEditTest, SnapshotEncodeDecode){
   edit.SetLogNumber(kBig + 100);
   edit.SetNextFile(kBig + 200);
   edit.SetLastSequence(kBig + 1000);
+  TestEncodeDecode(edit);
 }
 
 TEST(VersionEditTest, NormalEncodeDecode){
   static const uint64_t kBig = 1ull << 50;
   VersionEdit edit;
   edit.SetLevel(1, 2);
-  SortedRun run111(1, 111);
+  SortedRun run111(111, 1);
   FileMetaData f;
   f.number = kBig + 300 + 1;
   f.file_size = kBig + 400 + 1;
@@ -107,7 +108,6 @@ TEST(VersionEditTest, NormalEncodeDecode){
   run111.InsertContainFile(fp);
   run111.InsertL0File(f.number);
   edit.AddRun(run111);
-
   SortedRun run21(2, 21);
   f.number = kBig + 300 + 2;
   f.file_size = kBig + 400 + 2;
@@ -124,6 +124,7 @@ TEST(VersionEditTest, NormalEncodeDecode){
   edit.SetLogNumber(kBig + 100);
   edit.SetNextFile(kBig + 200);
   edit.SetLastSequence(kBig + 1000);
+  TestEncodeDecode(edit);
 }
 
 

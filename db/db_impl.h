@@ -206,7 +206,7 @@ class DBImpl : public DB {
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
-  VanillaBPlusTree<std::string, uint64_t>* btree;
+  VanillaBPlusTree<std::string, uint64_t>* btree_;
 };
 
 // Sanitize db options.  The caller should delete result.info_log if
