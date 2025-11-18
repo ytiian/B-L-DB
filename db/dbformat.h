@@ -31,11 +31,11 @@ static const int kL0_CompactionTrigger = 4;
 
 // Soft limit on number of level-0 files.  We slow down writes at this point.
 //当L0层的文件数量达到这个参数时，放慢写入速度
-static const int kL0_SlowdownWritesTrigger = 50;
+static const int kL0_SlowdownWritesTrigger = 8;
 
 // Maximum number of level-0 files.  We stop writes at this point.
 //当L0层的文件数量达到这个参数时，暂停写入
-static const int kL0_StopWritesTrigger = 1000;
+static const int kL0_StopWritesTrigger = 12;
 
 // Maximum level to which a new compacted memtable is pushed if it
 // does not create overlap.  We try to push to level 2 to avoid the
@@ -49,7 +49,7 @@ static const int kMaxMemCompactLevel = 2;
 // Approximate gap in bytes between samples of data read during iteration.
 static const int kReadBytesPeriod = 1048576;
 
-static const int kTieredTrigger = 4;
+static const int kTieredTrigger = 2;
 
 }  // namespace config
 

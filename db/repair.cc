@@ -204,8 +204,8 @@ class Repairer {
     FileMetaData meta;
     meta.number = next_file_number_++;
     Iterator* iter = mem->NewIterator();
-    VanillaBPlusTree<std::string, uint32_t> btree(options_.bTree_capacity);
-    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, &btree);
+    SkipListBase skiplist(BytewiseComparator());
+    status = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, &skiplist);
     delete iter;
     mem->Unref();
     mem = nullptr;

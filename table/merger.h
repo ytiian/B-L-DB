@@ -5,7 +5,6 @@
 #ifndef STORAGE_LEVELDB_TABLE_MERGER_H_
 #define STORAGE_LEVELDB_TABLE_MERGER_H_
 
-#include "trees/vanilla_b_plus_tree.h"
 #include <vector>
 #include <unordered_map>
 

@@ -15,7 +15,7 @@
 #include "db/log_writer.h"
 #include "db/memtable.h"
 #include "db/table_cache.h"
-#include "trees/vanilla_b_plus_tree.h"
+#include "skiplist/skip_list.h"
 #include "leveldb/env.h"
 #include "leveldb/table_builder.h"
 #include "table/merger.h"
@@ -48,7 +48,7 @@ static double MaxBytesForLevel(const Options* options, int level) {
   // the level-0 compaction threshold based on number of files.
 
   // Result for both level-0 and level-1
-  double result = 10. * 1048576.0;
+  double result = 256. * 1048576.0;
   while (level > 1) {
     result *= 10;
     level--;
@@ -394,7 +394,7 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
 }
 
 
-Status Version::RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree){
+Status Version::RebuildTree(SkipListBase* skip_index){
   for(int i = config::kNumLevels - 1; i >= 0; i--){
     for(int j = 0; j < runs_[i].size(); j++){
       const SortedRun* run = runs_[i][j];
@@ -418,27 +418,18 @@ Status Version::RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree){
             // Arrange to skip all upcoming entries for this key since
             // they are hidden by this deletion.
             //是否要改成0？
-            btree->insert(ikey.user_key.ToString(), L0);
+            skip_index->Insert(ikey.user_key.ToString(), L0);
             break;
           case kTypeValue:
-            btree->insert(ikey.user_key.ToString(), L0);
+            skip_index->Insert(ikey.user_key.ToString(), L0);
             break;
         }        
       }
     }
   }
+  return Status::OK();
 }
 
-void Version::PrintMap(VanillaBPlusTree<std::string, uint64_t>* btree){
-  //std::unordered_map<uint64_t, SortedRun*> L0_file_to_run_; 
-  /*for(const auto& L0 : L0_file_to_run_){
-    std::cout<<"map contain L0:"<<L0.first<<std::endl;
-  }
-  BTree<std::string, uint64_t>::Iterator* btree_iter = btree->NewTreeIterator();
-  for(btree_iter->SeekToFirst(); btree_iter->Valid(); btree_iter->Next()){
-    std::cout<<btree_iter->Key()<<" "<<btree_iter->Value()<<std::endl;
-  }*/
-}
 
 //对每个包含use key的文件调用func函数
 void Version::ForEachOverlapping(SortedRun* search_run, Slice user_key, Slice internal_key, void* arg,
@@ -581,14 +572,13 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
 
   //对每个文件待查文件都调用Match函数，直到match到所查key，就停止查找过程
   if(L0_id != 0){
-    if(L0_file_to_run_.find(L0_id) == L0_file_to_run_.end()){
-      L0_id = 0;
-    }else{
       SortedRun* search_run = GetMapRun(L0_id);
+      //std::cout<<"L0_id:"<<L0_id<<std::endl;
       //修改这个函数：
       //state.found=true;
-      ForEachOverlapping(search_run, state.saver.user_key, state.ikey, &state, &State::Match);          
-    }  
+      if(search_run != nullptr){
+        ForEachOverlapping(search_run, state.saver.user_key, state.ikey, &state, &State::Match);          
+      }
   }
 
   //SortedRun* search_run = GetMapRun(L0_id);
@@ -600,7 +590,11 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
 
 SortedRun* Version::GetMapRun(uint64_t id){
   std::unordered_map<uint64_t, SortedRun*>::iterator iter = L0_file_to_run_.find(id);
-  return iter->second;
+  if(iter == L0_file_to_run_.end()){
+    return nullptr;
+  } else{
+    return iter->second;
+  }
 }
 
 //？
@@ -716,9 +710,11 @@ void Version::Unref() {
 //简单修改：去掉if(level == 0)
 void Version::GetOverlappingInputs(int level, const InternalKey* begin,
                                    const InternalKey* end,
-                                   std::vector<FileMetaData*>* inputs) {
-  assert(level >= 0);
-  assert(level < config::kNumLevels);
+                                   std::vector<FileMetaData*>* inputs,
+                                   std::vector<SortedRun*>* runs) {
+  //assert(level >= 0);
+  //assert(level < config::kNumLevels);
+  assert(level == 0);
   inputs->clear();
   Slice user_begin, user_end;
   if (begin != nullptr) {
@@ -729,8 +725,10 @@ void Version::GetOverlappingInputs(int level, const InternalKey* begin,
   }
   const Comparator* user_cmp = vset_->icmp_.user_comparator();
   //对Level层的所有文件
-  for (size_t i = 0; i < files_[level].size();) {
-    FileMetaData* f = files_[level][i++];
+  for (size_t i = 0; i < runs_[0].size();) {
+    SortedRun* run = runs_[level][i++];
+    std::vector<FileMetaData*>* files = run->GetContainFile();
+    FileMetaData* f = (*files)[0];
     const Slice file_start = f->smallest.user_key();
     const Slice file_limit = f->largest.user_key();
     //range在这个文件之后
@@ -742,7 +740,8 @@ void Version::GetOverlappingInputs(int level, const InternalKey* begin,
       //重叠
     } else {
       inputs->push_back(f);//放入inputs
-      //if (level == 0) {
+      runs->push_back(run);
+      if (level == 0) {
         //L0可能会拓展range
         //把L0中以[begin,end]开始扩展的所有file都加入input
         // Level-0 files may overlap each other.  So check if the newly
@@ -757,7 +756,7 @@ void Version::GetOverlappingInputs(int level, const InternalKey* begin,
           inputs->clear();
           i = 0;
         }
-      //}
+      }
     }
   }
 }
@@ -1297,8 +1296,8 @@ Status VersionSet::Recover(bool* save_manifest) {
   return s;
 }
 
-Status VersionSet::RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree){
-  Status s = current_->RebuildTree(btree);
+Status VersionSet::RebuildTree(SkipListBase* skip_index){
+  Status s = current_->RebuildTree(skip_index);
   //current_->PrintMap(btree);
   //std::cout<<"print map end"<<std::endl;
   return s;
@@ -1361,7 +1360,7 @@ void VersionSet::Finalize(Version* v) {
 
   //逐层计算分数
   //不算最后一层。最后一层只能被倒数第二层选择，一起compacion
-  /*for (int level = 0; level < config::kNumLevels - 1; level++) {
+  for (int level = 0; level < config::kNumLevels - 1; level++) {
     double score;
     if (level == 0) {
       //对于Level0，根据文件数量出发
@@ -1387,12 +1386,12 @@ void VersionSet::Finalize(Version* v) {
       //score=该层当前字节数/最大字节数
       score =
           static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
-    }*/
+    }
   
-  for (int level = 0; level < config::kNumLevels; level++){
+  /*for (int level = 0; level < config::kNumLevels; level++){
     const uint64_t level_bytes = TotalFileSize(v->files_[level]);
     double score;
-    score = static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);
+    score = static_cast<double>(level_bytes) / MaxBytesForLevel(options_, level);*/
 
     //记录最高分和对应的层
     if (score > best_score) {
@@ -1539,7 +1538,7 @@ int64_t VersionSet::NumLevelBytes(int level) const {
 }
 
 int64_t VersionSet::MaxNextLevelOverlappingBytes() {
-  int64_t result = 0;
+  /*int64_t result = 0;
   std::vector<FileMetaData*> overlaps;
   for (int level = 1; level < config::kNumLevels - 1; level++) {
     for (size_t i = 0; i < current_->files_[level].size(); i++) {
@@ -1553,14 +1552,15 @@ int64_t VersionSet::MaxNextLevelOverlappingBytes() {
       }
     }
   }
-  return result;
+  return result;*/
+  return 0;
 }
 
 // Stores the minimal range that covers all entries in inputs in
 // *smallest, *largest.
 // REQUIRES: inputs is not empty
 //保存整个inputs中的最小key和最大key
-/*void VersionSet::GetRange(const std::vector<FileMetaData*>& inputs,
+void VersionSet::GetRange(const std::vector<FileMetaData*>& inputs,
                           InternalKey* smallest, InternalKey* largest) {
   assert(!inputs.empty());
   smallest->Clear();
@@ -1579,7 +1579,7 @@ int64_t VersionSet::MaxNextLevelOverlappingBytes() {
       }
     }
   }
-}*/
+}
 
 // Stores the minimal range that covers all entries in inputs1 and inputs2
 // in *smallest, *largest.
@@ -1649,19 +1649,39 @@ Compaction* VersionSet::PickCompaction() {
     assert(level >= 0);
     c = new Compaction(options_, level);
 
-    for(size_t i = 0; i < current_->runs_[level].size() && i < GetTieredTriggerNum(level); i++){
-      //if(level == 0){
-      //  c->inputs_.push_back(current_->files_[0][i]);
-      //}else{
+    if(level == 0){
+      for (size_t i = 0; i < current_->runs_[level].size(); i++) {
         SortedRun* run = current_->runs_[level][i];
-        c->inputs_runs_.push_back(run);
         std::vector<FileMetaData*>* files = run->GetContainFile();
-        for(size_t j = 0; j < files->size(); j++){
-          c->inputs_.push_back((*files)[j]);
+        FileMetaData* f = (*files)[0];
+        if (compact_pointer_[level].empty() ||
+            icmp_.Compare(f->largest.Encode(), compact_pointer_[level]) > 0) {
+          c->inputs_runs_.push_back(run);
+          c->inputs_.push_back(f);
+          break;
         }
-      //}
+      }      
+      InternalKey smallest, largest;
+      GetRange(c->inputs_, &smallest, &largest);
+      // Note that the next call will discard the file we placed in
+      // c->inputs_[0] earlier and replace it with an overlapping set
+      // which will include the picked file.
+      current_->GetOverlappingInputs(0, &smallest, &largest, &c->inputs_, &c->inputs_runs_);
+      assert(!c->inputs_.empty());      
+    }else{
+      for(size_t i = 0; i < current_->runs_[level].size() && i < GetTieredTriggerNum(level); i++){
+        //if(level == 0){
+        //  c->inputs_.push_back(current_->files_[0][i]);
+        //}else{
+          SortedRun* run = current_->runs_[level][i];
+          c->inputs_runs_.push_back(run);
+          std::vector<FileMetaData*>* files = run->GetContainFile();
+          for(size_t j = 0; j < files->size(); j++){
+            c->inputs_.push_back((*files)[j]);
+          }
+        //}
+      }
     }
-    
   } else {
     return nullptr;
   }

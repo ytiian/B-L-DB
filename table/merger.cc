@@ -8,7 +8,6 @@
 #include "leveldb/comparator.h"
 #include "leveldb/iterator.h"
 #include "table/iterator_wrapper.h"
-#include "trees/vanilla_b_plus_tree.h"
 #include "db/dbformat.h"
 #include <unordered_map>
 

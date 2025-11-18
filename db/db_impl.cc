@@ -155,7 +155,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-  btree_ = new VanillaBPlusTree<std::string, uint64_t>(options_.bTree_capacity);
+  skip_index_ = new SkipListBase(BytewiseComparator());
 }
 
 DBImpl::~DBImpl() {
@@ -186,7 +186,7 @@ DBImpl::~DBImpl() {
     delete options_.block_cache;
   }
 
-  delete btree_;
+  delete skip_index_;
 }
 
 //新建一个数据库
@@ -353,7 +353,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
 
-  s = versions_->RebuildTree(btree_);
+  s = versions_->RebuildTree(skip_index_);
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -570,7 +570,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     mutex_.Unlock();
     //iter构建在mem上
     //mem->sstable
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, btree_);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, skip_index_);
     mutex_.Lock();
   }
 
@@ -1200,7 +1200,7 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   versions_->current()->AddIterators(options, &list, index_map);
   //versions_->current()->AddRunsIterators(options, &list, )
   Iterator* disk_iter = 
-      NewDiskIterator(&internal_comparator_, &list[0], list.size(), btree_, index_map);
+      NewDiskIterator(&internal_comparator_, &list[0], list.size(), skip_index_, index_map);
   list_all.push_back(disk_iter);
     //std::cout<<"all size:"<<list_all.size()<<std::endl;
   Iterator* internal_iter =
@@ -1263,7 +1263,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else {
       //到磁盘上寻找
       uint64_t L0_id = 0;
-      btree_->search(key.ToString(), L0_id);
+      skip_index_->Lookup(key, L0_id);
       //std::cout<<"key"<<key.ToString()<<"L0_id:"<<L0_id<<std::endl;
       s = current->Get(options, lkey, value, &stats, L0_id);
       have_stat_update = true;
@@ -1278,6 +1278,17 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
+  return s;
+}
+
+Status DBImpl::Update(const leveldb::WriteOptions& options,
+                      const leveldb::Slice& key,
+                      const leveldb::Slice& value) {
+  std::string result;
+  Status s = Get(ReadOptions(), key, &result);
+  if (!s.IsNotFound()) {
+    s = Put(options, key, value);
+  } 
   return s;
 }
 
@@ -1602,8 +1613,8 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
 }
 
 void DBImpl::PrintTree(){
-  std::cout<<"print tree:"<<std::endl;
-  std::cout<<btree_->toString()<<std::endl;
+  //std::cout<<"print tree:"<<std::endl;
+  //std::cout<<btree_->toString()<<std::endl;
 }
 
 // Default implementations of convenience methods that subclasses of DB

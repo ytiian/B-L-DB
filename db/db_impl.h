@@ -17,7 +17,7 @@
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
-#include "trees/vanilla_b_plus_tree.h"
+#include "skiplist/skip_list.h"
 
 namespace leveldb {
 
@@ -43,6 +43,7 @@ class DBImpl : public DB {
   Status Write(const WriteOptions& options, WriteBatch* updates) override;
   Status Get(const ReadOptions& options, const Slice& key,
              std::string* value) override;
+  Status Update(const WriteOptions&, const Slice& key, const Slice& value);
   Iterator* NewIterator(const ReadOptions&) override;
   const Snapshot* GetSnapshot() override;
   void ReleaseSnapshot(const Snapshot* snapshot) override;
@@ -206,7 +207,7 @@ class DBImpl : public DB {
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
-  VanillaBPlusTree<std::string, uint64_t>* btree_;
+  SkipListBase* skip_index_;
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

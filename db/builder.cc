@@ -19,7 +19,7 @@ namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta,
-                  VanillaBPlusTree<std::string, uint64_t>* btree) {
+                  SkipListBase* skip_index) {
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
@@ -38,14 +38,14 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
     for (; iter->Valid(); iter->Next()) {
       //std::cout<<"before!!!!!!!!insert1:!!!!!!!!!!!!!!!!!!"<<std::endl;
-      //std::cout<<btree->toString()<<std::endl;
+      //std::cout<<skip_index->toString()<<std::endl;
       key = iter->key();
       //返回的是internalkey，需要减掉8bits的tag（internalkey=userkey+tag）
       Slice tmp(key.data(), key.size() - 8);
       std::string usr_key = tmp.ToString();
 
       builder->Add(key, iter->value());
-      btree->insert(usr_key, meta->number);
+      skip_index->Insert(usr_key, meta->number);
     }
 
     if (!key.empty()) {

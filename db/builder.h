@@ -6,8 +6,9 @@
 #define STORAGE_LEVELDB_DB_BUILDER_H_
 
 #include "leveldb/status.h"
-#include "trees/vanilla_b_plus_tree.h"
+#include "skiplist/skip_list.h"
 #include <string>
+#include <cstdint>
 
 namespace leveldb {
 
@@ -26,7 +27,7 @@ class VersionEdit;
 // zero, and no Table file will be produced.
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta, 
-                  VanillaBPlusTree<std::string, uint64_t>* btree);
+                  SkipListBase* skip_index);
 
 }  // namespace leveldb
 

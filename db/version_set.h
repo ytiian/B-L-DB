@@ -30,7 +30,7 @@
 #include "db/run_manager.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
-#include "trees/vanilla_b_plus_tree.h"
+#include "skiplist/skip_list.h"
 
 namespace leveldb {
 
@@ -76,7 +76,7 @@ class Version {
     int seek_file_level;
   };
 
-  Status RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree);
+  Status RebuildTree(SkipListBase* skip_index);
 
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -84,7 +84,7 @@ class Version {
   //*用于构建全局的迭代器，不需要修改
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters, std::unordered_map<uint64_t, int>* index_map);
 
-  void PrintMap(VanillaBPlusTree<std::string, uint64_t>* btree);
+  //void PrintMap(VanillaBPlusTree<std::string, uint64_t>* btree);
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.  Fills *stats.
   // REQUIRES: lock is not held
@@ -114,7 +114,8 @@ class Version {
       int level,
       const InternalKey* begin,  // nullptr means before all keys
       const InternalKey* end,    // nullptr means after all keys
-      std::vector<FileMetaData*>* inputs);
+      std::vector<FileMetaData*>* inputs,
+      std::vector<SortedRun*>* runs);
 
   // Returns true iff some file in the specified level overlaps
   // some part of [*smallest_user_key,*largest_user_key].
@@ -198,7 +199,7 @@ class VersionSet {
 
   ~VersionSet();
 
-  Status RebuildTree(VanillaBPlusTree<std::string, uint64_t>* btree);
+  Status RebuildTree(SkipListBase* skip_index);
   // Apply *edit to the current version to form a new descriptor that
   // is both saved to persistent state and installed as the new
   // current version.  Will release *mu while actually writing to the file.
