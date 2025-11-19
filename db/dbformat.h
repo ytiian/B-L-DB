@@ -51,6 +51,11 @@ static const int kReadBytesPeriod = 1048576;
 
 static const int kTieredTrigger = 2;
 
+static const size_t worker_num = 2;
+
+static const size_t bg_n = 1;
+
+
 }  // namespace config
 
 class InternalKey;

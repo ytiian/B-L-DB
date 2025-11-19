@@ -18,6 +18,7 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 #include "skiplist/skip_list.h"
+#include "sindex/sindex_wrapper.h"
 
 namespace leveldb {
 
@@ -208,6 +209,8 @@ class DBImpl : public DB {
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
   SkipListBase* skip_index_;
+
+  SIndexWrapper* sindex_;
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

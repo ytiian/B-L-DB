@@ -96,6 +96,11 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
   //kBlockTrailerSize：type+crc
   char* buf = new char[n + kBlockTrailerSize];//整个块的大小
   Slice contents;
+  assert(file != nullptr);
+  assert(buf != nullptr);
+  assert(n > 0);
+  assert(n + kBlockTrailerSize > 0);
+  // 假设 file 有 GetFileSize() 方法
   //读入contents，但buf的作用？
   Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
   if (!s.ok()) {

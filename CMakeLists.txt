@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+add_compile_options(-mavx2 -mfma -mf16c -mfpmath=sse)
+
 cmake_minimum_required(VERSION 3.9)
 # Keep the version below in sync with the one in db.h
 project(leveldb VERSION 1.23.0 LANGUAGES C CXX)
@@ -193,6 +195,18 @@ target_sources(leveldb
     "util/random.h"
     "util/status.cc"
     "skiplist/skip_list.h"
+    "sindex/sindex_buffer_impl.h"
+    "sindex/sindex_buffer.h"
+    "sindex/sindex_group_impl.h"
+    "sindex/sindex_group.h"
+    "sindex/sindex_impl.h"
+    "sindex/sindex_model.h"
+    "sindex/sindex_root_impl.h"
+    "sindex/sindex_root.h"
+    "sindex/sindex_util.h"
+    "sindex/sindex.h"
+    "sindex/sindex_wrapper.h"
+    "sindex/helper.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -297,13 +311,23 @@ set(FMT_LIBRARIES "/usr/local/lib/libfmt.a")
 set(FOLLY_INCLUDE_DIRS "/usr/local/include/folly")
 set(FOLLY_LIBRARIES "/usr/local/lib/libfolly.a")
 
+set(JEMALLOC_DIR "/usr/lib/x86_64-linux-gnu")
+set(MKL_LINK_DIRECTORY "/usr/lib/x86_64-linux-gnu/mkl")
+set(MKL_INCLUDE_DIRECTORY "/usr/include/mkl")
+
+link_directories(${JEMALLOC_DIR})
+link_directories(${MKL_LINK_DIRECTORY})
+link_libraries(jemalloc)
+
+include_directories(${MKL_INCLUDE_DIRECTORY})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # 包含头文件目录
 include_directories(${GLOG_INCLUDE_DIRS})
 include_directories(${FMT_INCLUDE_DIRS})
 include_directories(${FOLLY_INCLUDE_DIRS})
 
 # 链接必要的库到 leveldb 目标
-target_link_libraries(leveldb ${FOLLY_LIBRARIES} ${GLOG_LIBRARIES} ${FMT_LIBRARIES})
+target_link_libraries(leveldb ${FOLLY_LIBRARIES} ${GLOG_LIBRARIES} ${FMT_LIBRARIES} mkl_rt)
 
 add_executable(leveldbutil
   "db/leveldbutil.cc"

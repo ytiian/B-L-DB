@@ -155,7 +155,8 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-  skip_index_ = new SkipListBase(BytewiseComparator());
+  sindex_ = new SIndexWrapper();
+  skip_index_ = nullptr;
 }
 
 DBImpl::~DBImpl() {
@@ -186,7 +187,8 @@ DBImpl::~DBImpl() {
     delete options_.block_cache;
   }
 
-  delete skip_index_;
+  //delete skip_index_;
+  delete sindex_;
 }
 
 //新建一个数据库
@@ -353,7 +355,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
 
-  s = versions_->RebuildTree(skip_index_);
+  //s = versions_->RebuildTree(skip_index_);
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -570,7 +572,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     mutex_.Unlock();
     //iter构建在mem上
     //mem->sstable
-    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, skip_index_);
+    s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta, sindex_);
     mutex_.Lock();
   }
 
@@ -1263,8 +1265,8 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     } else {
       //到磁盘上寻找
       uint64_t L0_id = 0;
-      skip_index_->Lookup(key, L0_id);
-      //std::cout<<"key"<<key.ToString()<<"L0_id:"<<L0_id<<std::endl;
+      sindex_->Lookup(key.ToString(), L0_id, 1);
+      std::cout<<"key"<<key.ToString()<<" L0_id:"<<L0_id<<std::endl;
       s = current->Get(options, lkey, value, &stats, L0_id);
       have_stat_update = true;
     }

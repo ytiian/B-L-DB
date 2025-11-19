@@ -14,12 +14,13 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
+#include "sindex/sindex_wrapper.h"
 
 namespace leveldb {
 
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta,
-                  SkipListBase* skip_index) {
+                  SIndexWrapper* sindex) {
   Status s;
   meta->file_size = 0;
   iter->SeekToFirst();
@@ -36,17 +37,38 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     meta->smallest.DecodeFrom(iter->key());
     Slice key;
 
+    std::vector<index_key_t> index_keys;
+
+    std::string usr_key = "";
+    std::string last_key = "";
+
     for (; iter->Valid(); iter->Next()) {
       //std::cout<<"before!!!!!!!!insert1:!!!!!!!!!!!!!!!!!!"<<std::endl;
       //std::cout<<skip_index->toString()<<std::endl;
       key = iter->key();
       //返回的是internalkey，需要减掉8bits的tag（internalkey=userkey+tag）
       Slice tmp(key.data(), key.size() - 8);
-      std::string usr_key = tmp.ToString();
+      last_key = usr_key;
+      usr_key = tmp.ToString();
 
       builder->Add(key, iter->value());
-      skip_index->Insert(usr_key, meta->number);
+      if(sindex->isNull()){
+        if(usr_key != last_key){
+          index_keys.emplace_back(usr_key);
+        }else{
+          std::cout<<usr_key<<std::endl;
+        }
+      }else{
+        sindex->Insert(index_key_t(usr_key), meta->number, (uint32_t)WorkerType::FLUSH);
+        std::cout<<usr_key<<" "<<meta->number<<std::endl;
+      }
+      
     }
+
+    if(sindex->isNull()){
+      sindex->BuildSIndex(index_keys, config::worker_num, config::bg_n, meta->number);
+    }
+    
 
     if (!key.empty()) {
       meta->largest.DecodeFrom(key);

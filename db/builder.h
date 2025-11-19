@@ -6,7 +6,7 @@
 #define STORAGE_LEVELDB_DB_BUILDER_H_
 
 #include "leveldb/status.h"
-#include "skiplist/skip_list.h"
+#include "sindex/sindex_wrapper.h"
 #include <string>
 #include <cstdint>
 
@@ -27,7 +27,7 @@ class VersionEdit;
 // zero, and no Table file will be produced.
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta, 
-                  SkipListBase* skip_index);
+                  SIndexWrapper* sindex);
 
 }  // namespace leveldb
 
