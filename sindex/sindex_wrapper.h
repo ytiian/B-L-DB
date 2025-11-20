@@ -109,10 +109,7 @@ class SIndexWrapper {
 
   void BuildSIndex(const std::vector<index_key_t> &data,
                    size_t worker_num, size_t bg_n, uint64_t L0_id) {
-    if (sindex_ != nullptr) {
-      delete sindex_;
-      sindex_ = nullptr;
-    }
+    assert (sindex_ == nullptr);
     
     std::vector<uint64_t> vals(data.size(), L0_id);
     sindex_ = new sindex_t(data, vals, worker_num, bg_n);

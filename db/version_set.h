@@ -31,6 +31,7 @@
 #include "port/port.h"
 #include "port/thread_annotations.h"
 #include "skiplist/skip_list.h"
+#include "sindex/sindex_wrapper.h"
 
 namespace leveldb {
 
@@ -76,7 +77,7 @@ class Version {
     int seek_file_level;
   };
 
-  Status RebuildTree(SkipListBase* skip_index);
+  Status RebuildSIndex(SIndexWrapper* sindex);
 
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -199,7 +200,7 @@ class VersionSet {
 
   ~VersionSet();
 
-  Status RebuildTree(SkipListBase* skip_index);
+  Status RebuildSIndex(SIndexWrapper* sindex);
   // Apply *edit to the current version to form a new descriptor that
   // is both saved to persistent state and installed as the new
   // current version.  Will release *mu while actually writing to the file.

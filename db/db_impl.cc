@@ -355,7 +355,6 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
 
-  //s = versions_->RebuildTree(skip_index_);
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -411,6 +410,8 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     // update the file number allocation counter in VersionSet.
     versions_->MarkFileNumberUsed(logs[i]);
   }
+
+  s = versions_->RebuildSIndex(sindex_);
 
   if (versions_->LastSequence() < max_sequence) {
     versions_->SetLastSequence(max_sequence);
@@ -1266,7 +1267,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
       //到磁盘上寻找
       uint64_t L0_id = 0;
       sindex_->Lookup(key.ToString(), L0_id, 1);
-      std::cout<<"key"<<key.ToString()<<" L0_id:"<<L0_id<<std::endl;
+      //std::cout<<"key"<<key.ToString()<<" L0_id:"<<L0_id<<std::endl;
       s = current->Get(options, lkey, value, &stats, L0_id);
       have_stat_update = true;
     }

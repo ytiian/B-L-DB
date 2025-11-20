@@ -394,7 +394,7 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
 }
 
 
-Status Version::RebuildTree(SkipListBase* skip_index){
+Status Version::RebuildSIndex(SIndexWrapper* sindex){
   for(int i = config::kNumLevels - 1; i >= 0; i--){
     for(int j = 0; j < runs_[i].size(); j++){
       const SortedRun* run = runs_[i][j];
@@ -418,10 +418,11 @@ Status Version::RebuildTree(SkipListBase* skip_index){
             // Arrange to skip all upcoming entries for this key since
             // they are hidden by this deletion.
             //是否要改成0？
-            skip_index->Insert(ikey.user_key.ToString(), L0);
+            sindex->Insert(ikey.user_key.ToString(), L0, 2);
             break;
           case kTypeValue:
-            skip_index->Insert(ikey.user_key.ToString(), L0);
+            //std::cout<<"insert:"<<ikey.user_key<<std::endl;
+            sindex->Insert(ikey.user_key.ToString(), L0, 2);
             break;
         }        
       }
@@ -1296,8 +1297,8 @@ Status VersionSet::Recover(bool* save_manifest) {
   return s;
 }
 
-Status VersionSet::RebuildTree(SkipListBase* skip_index){
-  Status s = current_->RebuildTree(skip_index);
+Status VersionSet::RebuildSIndex(SIndexWrapper* sindex){
+  Status s = current_->RebuildSIndex(sindex);
   //current_->PrintMap(btree);
   //std::cout<<"print map end"<<std::endl;
   return s;

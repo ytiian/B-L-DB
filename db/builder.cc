@@ -55,12 +55,10 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       if(sindex->isNull()){
         if(usr_key != last_key){
           index_keys.emplace_back(usr_key);
-        }else{
-          std::cout<<usr_key<<std::endl;
         }
       }else{
         sindex->Insert(index_key_t(usr_key), meta->number, (uint32_t)WorkerType::FLUSH);
-        std::cout<<usr_key<<" "<<meta->number<<std::endl;
+        //std::cout<<usr_key<<" "<<meta->number<<std::endl;
       }
       
     }
