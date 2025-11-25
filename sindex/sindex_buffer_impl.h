@@ -692,7 +692,7 @@ void AltBtreeBuffer<key_t, val_t>::Leaf::copy_vals(int begin,
 
 template <class key_t, class val_t>
 AltBtreeBuffer<key_t, val_t>::DataSource::DataSource(key_t begin,
-                                                     AltBtreeBuffer *buffer) {
+                                                     std::shared_ptr<AltBtreeBuffer> buffer) {
   uint64_t leaf_ver;
   leaf_t *leaf_ptr = buffer->locate_leaf(begin, leaf_ver);
 
@@ -793,7 +793,7 @@ const val_t &AltBtreeBuffer<key_t, val_t>::DataSource::get_val() {
 }
 
 template <class key_t, class val_t>
-AltBtreeBuffer<key_t, val_t>::RefSource::RefSource(AltBtreeBuffer *buffer)
+AltBtreeBuffer<key_t, val_t>::RefSource::RefSource(std::shared_ptr<AltBtreeBuffer> buffer)
     : next(buffer->begin) {
   assert(next);
   uint64_t ver;

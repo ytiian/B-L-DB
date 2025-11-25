@@ -80,6 +80,8 @@ class IteratorWrapper {
     valid_ = iter_->Valid();
     if (valid_) {
       key_ = iter_->key();
+    }else{
+      key_ = Slice();
     }
   }
 

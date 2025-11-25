@@ -208,7 +208,7 @@ class DBImpl : public DB {
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);
 
-  SkipListBase* skip_index_;
+  //SkipListBase* skip_index_;
 
   SIndexWrapper* sindex_;
 };

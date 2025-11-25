@@ -29,6 +29,15 @@
 
 namespace sindex {
 
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+struct SourceBase {
+    bool has_next;
+    virtual const key_t& get_key() = 0;
+    virtual const val_t& get_val() = 0;
+    virtual void advance_to_next_valid() = 0;
+    virtual ~SourceBase() = default;
+};
+
 static const size_t desired_training_key_n = 10000000;
 static const size_t max_model_n = 4;
 static const size_t seq_insert_reserve_factor = 2;

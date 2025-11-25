@@ -103,8 +103,9 @@ class AltBtreeBuffer {
     Leaf *next;
   };
 
-  struct DataSource {
-    DataSource(key_t begin, AltBtreeBuffer *buffer);
+  class DataSource : public SourceBase<key_t, val_t, false, 4> {
+  public:
+    DataSource(key_t begin, std::shared_ptr<AltBtreeBuffer> buffer);
     void advance_to_next_valid();
     const key_t &get_key();
     const val_t &get_val();
@@ -119,7 +120,7 @@ class AltBtreeBuffer {
   struct RefSource {
     typedef AtomicVal<val_t> atomic_val_t;
 
-    RefSource(AltBtreeBuffer *buffer);
+    RefSource(std::shared_ptr<AltBtreeBuffer> buffer);
     void advance_to_next_valid();
     const key_t &get_key();
     atomic_val_t &get_val();

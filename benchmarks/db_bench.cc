@@ -915,7 +915,7 @@ class Benchmark {
       thread->stats.FinishedSingleOp();
       ++i;
     }
-    std::cout<<"read:"<<i<<std::endl;
+    std::cout<<"read:"<<i<<"scan records"<<std::endl;
     delete iter;
     thread->stats.AddBytes(bytes);
   }

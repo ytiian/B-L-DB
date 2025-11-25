@@ -104,6 +104,36 @@ size_t SIndex<key_t, val_t, seq>::range_scan(
 }
 
 template <class key_t, class val_t, bool seq>
+void SIndex<key_t, val_t, seq>::Iterator::SeekToFirst(){
+  rcu_progress(worker_id);
+  return root_iterator_->SeekToFirst();
+}
+
+template <class key_t, class val_t, bool seq>
+bool SIndex<key_t, val_t, seq>::Iterator::Valid(){
+  rcu_progress(worker_id);
+  return root_iterator_->Valid();
+}
+
+template <class key_t, class val_t, bool seq>
+key_t SIndex<key_t, val_t, seq>::Iterator::Key(){
+  rcu_progress(worker_id);
+  return root_iterator_->Key();
+}
+
+template <class key_t, class val_t, bool seq>
+val_t SIndex<key_t, val_t, seq>::Iterator::Value(){
+  rcu_progress(worker_id);
+  return root_iterator_->Value();
+}
+
+template <class key_t, class val_t, bool seq>
+void SIndex<key_t, val_t, seq>::Iterator::Next(){
+  rcu_progress(worker_id);
+  root_iterator_->Next();
+}
+
+template <class key_t, class val_t, bool seq>
 void *SIndex<key_t, val_t, seq>::background(void *this_) {
   volatile SIndex &index = *(SIndex *)this_;
   if (index.bg_num == 0) return nullptr;

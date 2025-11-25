@@ -39,6 +39,9 @@ class StrKey {
     memset(&buf, 0, len);
     memcpy(&buf, s.data(), s.size());
   }
+  std::string ToString() const {
+      return std::string(reinterpret_cast<const char*>(buf), len);
+  }
   StrKey(const StrKey &other) { memcpy(&buf, &other.buf, len); }
   StrKey &operator=(const StrKey &other) {
     memcpy(&buf, &other.buf, len);
@@ -83,11 +86,12 @@ class StrKey {
   }
 
   friend std::ostream &operator<<(std::ostream &os, const StrKey &key) {
-    os << "key [" << std::hex;
-    for (size_t i = 0; i < sizeof(StrKey); i++) {
-      os << "0x" << key.buf[i] << " ";
-    }
-    os << "] (as byte)" << std::dec;
+    // os << "key [" << std::hex;
+    // for (size_t i = 0; i < sizeof(StrKey); i++) {
+    //   os << "0x" << key.buf[i] << " ";
+    // }
+    // os << "] (as byte)" << std::dec;
+    os<<key.ToString()<<std::dec;
     return os;
   }
 
@@ -128,6 +132,66 @@ class SIndexWrapper {
       return false;
     }
     return sindex_->get(key, value, worker_id);
+  }
+
+  class Iterator {
+    public:
+    // Initialize an iterator over the specified list.
+    // The returned iterator is not valid.
+
+    explicit Iterator(sindex_t* sindex, const uint32_t worker_id):
+                      worker_id(worker_id),
+                      sindex_(sindex),
+                      sindex_iterator_(sindex_->NewIterator(worker_id)) {};
+
+    ~Iterator() {
+        if (sindex_iterator_) {
+            delete sindex_iterator_;
+            sindex_iterator_ = nullptr;
+        }
+    }                      
+
+
+    // Returns true iff the iterator is positioned at a valid node.
+    bool Valid() const{
+      return sindex_iterator_->Valid();
+    }
+
+    // Advances to the next position.
+    // REQUIRES: Valid()
+    void Next(){
+      return sindex_iterator_->Next();
+    }
+
+    // Advance to the first entry with a key >= target
+    void Seek(const key_t& target);
+
+    // Position at the first entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToFirst(){
+      return sindex_iterator_->SeekToFirst();
+    }
+
+    // Position at the last entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    //void SeekToLast();
+
+    index_key_t Key(){
+      return sindex_iterator_->Key();
+    }
+
+    uint64_t Value(){
+      return sindex_iterator_->Value();
+    }
+
+  private:
+    const uint32_t worker_id;
+    sindex_t* sindex_;
+    typename sindex_t::Iterator *sindex_iterator_;
+  };
+
+  Iterator* NewIterator(const uint32_t worker_id){
+    return new Iterator(sindex_, worker_id);
   }
 
  private:

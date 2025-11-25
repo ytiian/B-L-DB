@@ -50,6 +50,57 @@ class SIndex {
   size_t range_scan(const key_t &begin, const key_t &end,
                     std::vector<std::pair<key_t, val_t>> &result,
                     const uint32_t worker_id);
+
+  class Iterator {
+    public:
+    // Initialize an iterator over the specified list.
+    // The returned iterator is not valid.
+
+    explicit Iterator(root_t* root, const uint32_t worker_id):
+                      worker_id(worker_id),
+                      root_(root),
+                      root_iterator_(root_->NewIterator()) {};
+
+    ~Iterator() {
+        if (root_iterator_) {
+            delete root_iterator_;
+            root_iterator_ = nullptr;
+        }
+    }                      
+
+
+    // Returns true iff the iterator is positioned at a valid node.
+    bool Valid();
+
+    // Advances to the next position.
+    // REQUIRES: Valid()
+    void Next();
+
+    // Advance to the first entry with a key >= target
+    void Seek(const key_t& target);
+
+    // Position at the first entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToFirst();
+
+    // Position at the last entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    //void SeekToLast();
+
+    key_t Key();
+
+    val_t Value();
+
+  private:
+    const uint32_t worker_id;
+    root_t *volatile root_;
+    typename root_t::Iterator *root_iterator_;
+  };
+
+  Iterator* NewIterator(const uint32_t worker_id){
+    return new Iterator(root, worker_id);
+  }
+
  private:
   void start_bg();
   void terminate_bg();

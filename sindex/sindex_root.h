@@ -59,6 +59,59 @@ class Root {
   Root *create_new_root();
   void trim_root();
 
+  class Iterator {
+  public:
+    // Initialize an iterator over the specified list.
+    // The returned iterator is not valid.
+
+    explicit Iterator(Root* root) : root_(root),
+                                      current_group_(nullptr),
+                                      group_iterator_(nullptr),
+                                      valid_(false),
+                                      group_i(0),
+                                      latest_group_pivot_(key_t::min()) {}
+
+    ~Iterator() {
+        if (group_iterator_) {
+            delete group_iterator_;
+            group_iterator_ = nullptr;
+        }
+    }
+
+    // Returns true iff the iterator is positioned at a valid node.
+    bool Valid();
+
+    // Advances to the next position.
+    // REQUIRES: Valid()
+    void Next();
+
+    // Advance to the first entry with a key >= target
+    void Seek(const key_t& target);
+
+    // Position at the first entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToFirst();
+
+    // Position at the last entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    //void SeekToLast();
+
+    key_t Key();
+
+    val_t Value();
+
+  private:
+    key_t latest_group_pivot_;
+    Root* root_;
+    group_t *current_group_;
+    typename group_t::Iterator* group_iterator_;
+    bool valid_;
+    int group_i;
+
+  };
+
+  Iterator* NewIterator() { return new Iterator(this); }
+
  private:
   void adjust_root_model();
   void train_rmi(size_t rmi_2nd_stage_model_n,

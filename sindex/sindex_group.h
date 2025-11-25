@@ -21,6 +21,7 @@
 #include "sindex_buffer.h"
 #include "sindex_model.h"
 #include "sindex_util.h"
+#include <memory>
 
 #if !defined(SINDEX_GROUP_H)
 #define SINDEX_GROUP_H
@@ -40,27 +41,28 @@ class alignas(CACHELINE_SIZE) Group {
   template <class key_tt, class val_tt, bool sequential>
   friend class Root;
 
-  struct ArrayDataSource {
-    ArrayDataSource(record_t *data, uint32_t array_size, uint32_t pos);
+  class ArrayDataSource: public SourceBase<key_t, val_t, seq, max_model_n> {
+  public:
+    ArrayDataSource(std::shared_ptr<record_t[]>data, uint32_t array_size, uint32_t pos);
     void advance_to_next_valid();
     const key_t &get_key();
     const val_t &get_val();
 
     uint32_t array_size, pos;
-    record_t *data;
+    std::shared_ptr<record_t[]>data;
     bool has_next;
     key_t next_key;
     val_t next_val;
   };
 
   struct ArrayRefSource {
-    ArrayRefSource(record_t *data, uint32_t array_size);
+    ArrayRefSource(std::shared_ptr<record_t[]>data, uint32_t array_size);
     void advance_to_next_valid();
     const key_t &get_key();
     atomic_val_t &get_val();
 
     uint32_t array_size, pos;
-    record_t *data;
+    std::shared_ptr<record_t[]>data;
     bool has_next;
     key_t next_key;
     atomic_val_t *next_val_ptr;
@@ -98,6 +100,67 @@ class alignas(CACHELINE_SIZE) Group {
   void free_data();
   void free_buffer();
 
+  class Iterator {
+  public:
+    // Initialize an iterator over the specified list.
+    // The returned iterator is not valid.
+
+    explicit Iterator(Group* group, size_t split_number): 
+                      group_(group),
+                      data_(nullptr), 
+                      split_number_(split_number),
+                      array_size_(0),
+                      pos_(0),
+                      valid_(false) {};
+
+    // Returns true iff the iterator is positioned at a valid node.
+    bool Valid();
+
+    // Advances to the next position.
+    // REQUIRES: Valid()
+    void Next();
+
+    // Advance to the first entry with a key >= target
+    void Seek(const key_t& target);
+
+    // Position at the first entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    void SeekToFirst();
+
+    // Position at the last entry in list.
+    // Final state of iterator is Valid() iff list is not empty.
+    //void SeekToLast();
+
+    key_t Key();
+
+    val_t Value();
+
+  private:
+    std::vector<std::pair<key_t, val_t>> result_;
+    size_t split_number_;
+    std::shared_ptr<record_t[]>data_;
+    uint32_t array_size_;
+    uint32_t pos_;
+    bool valid_;
+    std::shared_ptr<ArrayDataSource> array_source;
+    std::shared_ptr<typename buffer_t::DataSource> buffer_source;
+    std::shared_ptr<typename buffer_t::DataSource> temp_buffer_source;
+
+    key_t current_key_;
+    val_t current_value_;
+
+    Group* group_;
+
+
+    void set_parameters(std::shared_ptr<record_t[]>data, uint32_t array_size, uint32_t pos) {
+      this->data_ = data;
+      this->array_size_ = array_size;
+      this->pos_ = pos;
+    }
+  };
+
+  Iterator* NewIterator() { return new Iterator(this, 10); }
+
  private:
   inline size_t locate_model(const key_t &key);
 
@@ -110,34 +173,34 @@ class alignas(CACHELINE_SIZE) Group {
   inline size_t binary_search_key(const key_t &key, size_t pos_hint,
                                   size_t search_begin, size_t search_end);
   inline size_t exponential_search_key(const key_t &key, size_t pos_hint) const;
-  inline size_t exponential_search_key(record_t *const data,
+  inline size_t exponential_search_key(std::shared_ptr<record_t[]>const data,
                                        uint32_t array_size, const key_t &key,
                                        size_t pos_hint) const;
 
-  inline bool get_from_buffer(const key_t &key, val_t &val, buffer_t *buffer);
+  inline bool get_from_buffer(const key_t &key, val_t &val, std::shared_ptr<buffer_t>buffer);
   inline bool update_to_buffer(const key_t &key, const val_t &val,
-                               buffer_t *buffer);
+                               std::shared_ptr<buffer_t>buffer);
   inline void insert_to_buffer(const key_t &key, const val_t &val,
-                               buffer_t *buffer);
-  inline bool remove_from_buffer(const key_t &key, buffer_t *buffer);
+                               std::shared_ptr<buffer_t>buffer);
+  inline bool remove_from_buffer(const key_t &key, std::shared_ptr<buffer_t>buffer);
 
   void init_models(uint32_t model_n);
   void init_models(uint32_t model_n, size_t p_len, size_t f_len);
   void init_feature_length();
   inline double train_model(size_t model_i, size_t begin, size_t end);
 
-  inline void merge_refs(record_t *&new_data, uint32_t &new_array_size,
+  inline void merge_refs(std::shared_ptr<record_t[]>&new_data, uint32_t &new_array_size,
                          int32_t &new_capacity) const;
-  inline void merge_refs_n_split(record_t *&new_data_1,
+  inline void merge_refs_n_split(std::shared_ptr<record_t[]>&new_data_1,
                                  uint32_t &new_array_size_1,
-                                 int32_t &new_capacity_1, record_t *&new_data_2,
+                                 int32_t &new_capacity_1, std::shared_ptr<record_t[]>&new_data_2,
                                  uint32_t &new_array_size_2,
                                  int32_t &new_capacity_2,
                                  const key_t &key) const;
-  inline void merge_refs_with(const Group &next_group, record_t *&new_data,
+  inline void merge_refs_with(const Group &next_group, std::shared_ptr<record_t[]>&new_data,
                               uint32_t &new_array_size,
                               int32_t &new_capacity) const;
-  inline void merge_refs_internal(record_t *new_data,
+  inline void merge_refs_internal(std::shared_ptr<record_t[]>new_data,
                                   uint32_t &new_array_size) const;
   inline size_t scan_2_way(const key_t &begin, const size_t n, const key_t &end,
                            std::vector<std::pair<key_t, val_t>> &result);
@@ -176,10 +239,10 @@ class alignas(CACHELINE_SIZE) Group {
   uint8_t prefix_len = 0;           // 1B
   uint8_t feature_len = 0;          // 1B
   bool buf_frozen = false;          // 1B
-  record_t *data = nullptr;         // 8B
+  std::shared_ptr<record_t[]>data = nullptr;         // 8B
   Group *next = nullptr;            // 8B
-  buffer_t *buffer = nullptr;       // 8B
-  buffer_t *buffer_temp = nullptr;  // 8B
+  std::shared_ptr<buffer_t>buffer = nullptr;       // 8B
+  std::shared_ptr<buffer_t>buffer_temp = nullptr;  // 8B
   // used for sequential insertion
   int32_t capacity = 0;         // 4B
   uint16_t pos_last_pivot = 0;  // 2B

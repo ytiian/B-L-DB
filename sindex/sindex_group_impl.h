@@ -51,8 +51,8 @@ void Group<key_t, val_t, seq, max_model_n>::init(
   this->array_size = array_size;
   this->capacity = array_size * seq_insert_reserve_factor;
   this->model_n = model_n;
-  data = new record_t[this->capacity]();
-  buffer = new buffer_t();
+  data = std::shared_ptr<record_t[]>(new record_t[this->capacity]());
+  buffer = std::make_shared<buffer_t>();
 
   for (size_t rec_i = 0; rec_i < array_size; rec_i++) {
     data[rec_i].first = *(keys_begin + rec_i);
@@ -267,8 +267,8 @@ Group<key_t, val_t, seq, max_model_n>
   new_group_2->buf_frozen = true;
   new_group_1->buffer = buffer;
   new_group_2->buffer = buffer;
-  new_group_1->buffer_temp = new buffer_t();
-  new_group_2->buffer_temp = new buffer_t();
+  new_group_1->buffer_temp = std::make_shared<buffer_t>();
+  new_group_2->buffer_temp = std::make_shared<buffer_t>();
   new_group_1->next = new_group_2;
   new_group_2->next = next;
 
@@ -317,7 +317,7 @@ Group<key_t, val_t, seq, max_model_n>
   next_group.buf_frozen = true;
   memory_fence();
   rcu_barrier();
-  buffer_temp = new buffer_t();
+  buffer_temp = std::make_shared<buffer_t>();
   next_group.buffer_temp = buffer_temp;
 
   Group *new_group = new Group();
@@ -350,7 +350,7 @@ Group<key_t, val_t, seq, max_model_n>
   buf_frozen = true;
   memory_fence();
   rcu_barrier();
-  buffer_temp = new buffer_t();
+  buffer_temp = std::make_shared<buffer_t>();
 
   // now merge sort into a new array and train models
   Group *new_group = new Group();
@@ -381,13 +381,13 @@ inline void Group<key_t, val_t, seq, max_model_n>::compact_phase_2() {
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 void Group<key_t, val_t, seq, max_model_n>::free_data() {
-  delete[] data;
-  data = nullptr;
+  // delete[] data;
+  // data = nullptr;
 }
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 void Group<key_t, val_t, seq, max_model_n>::free_buffer() {
-  delete buffer;
-  buffer = nullptr;
+  // delete buffer;
+  // buffer = nullptr;
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
@@ -437,10 +437,10 @@ inline result_t Group<key_t, val_t, seq, max_model_n>::update_to_array(
         }
 
         if ((int32_t)array_size == capacity) {
-          record_t *prev_data = nullptr;
+          std::shared_ptr<record_t[]>prev_data = nullptr;
           capacity = array_size * seq_insert_reserve_factor;
-          record_t *new_data = new record_t[capacity]();
-          memcpy(new_data, data, array_size * sizeof(record_t));
+          std::shared_ptr<record_t[]>new_data(new record_t[capacity]());
+          memcpy(new_data.get(), data.get(), array_size * sizeof(record_t));
           prev_data = data;
           data = new_data;
 
@@ -451,7 +451,7 @@ inline result_t Group<key_t, val_t, seq, max_model_n>::update_to_array(
 
           rcu_barrier(worker_id);
           memory_fence();
-          delete[] prev_data;
+          //delete[] prev_data;
           prev_data = nullptr;
           return result_t::ok;
         } else {
@@ -537,7 +537,7 @@ inline size_t Group<key_t, val_t, seq, max_model_n>::exponential_search_key(
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline size_t Group<key_t, val_t, seq, max_model_n>::exponential_search_key(
-    record_t *const data, uint32_t array_size, const key_t &key,
+    std::shared_ptr<record_t[]>const data, uint32_t array_size, const key_t &key,
     size_t pos) const {
   if (array_size == 0) return 0;
   pos = (pos >= array_size ? (array_size - 1) : pos);
@@ -605,25 +605,25 @@ inline size_t Group<key_t, val_t, seq, max_model_n>::exponential_search_key(
 // return true on success
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline bool Group<key_t, val_t, seq, max_model_n>::get_from_buffer(
-    const key_t &key, val_t &val, buffer_t *buffer) {
+    const key_t &key, val_t &val, std::shared_ptr<buffer_t>buffer) {
   return buffer->get(key, val);
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline bool Group<key_t, val_t, seq, max_model_n>::update_to_buffer(
-    const key_t &key, const val_t &val, buffer_t *buffer) {
+    const key_t &key, const val_t &val, std::shared_ptr<buffer_t>buffer) {
   return buffer->update(key, val);
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline void Group<key_t, val_t, seq, max_model_n>::insert_to_buffer(
-    const key_t &key, const val_t &val, buffer_t *buffer) {
+    const key_t &key, const val_t &val, std::shared_ptr<buffer_t>buffer) {
   buffer->insert(key, val);
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline bool Group<key_t, val_t, seq, max_model_n>::remove_from_buffer(
-    const key_t &key, buffer_t *buffer) {
+    const key_t &key, std::shared_ptr<buffer_t>buffer) {
   return buffer->remove(key);
 }
 
@@ -753,19 +753,19 @@ inline void Group<key_t, val_t, seq, max_model_n>::disable_seq_insert_opt() {
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline void Group<key_t, val_t, seq, max_model_n>::merge_refs(
-    record_t *&new_data, uint32_t &new_array_size,
+    std::shared_ptr<record_t[]>&new_data, uint32_t &new_array_size,
     int32_t &new_capacity) const {
   size_t est_size = array_size + buffer->size();
   new_capacity = est_size * seq_insert_reserve_factor;
-  new_data = new record_t[new_capacity]();
+  new_data = std::shared_ptr<record_t[]>(new record_t[new_capacity]());
   merge_refs_internal(new_data, new_array_size);
   assert((int32_t)new_array_size <= new_capacity);
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_n_split(
-    record_t *&new_data_1, uint32_t &new_array_size_1, int32_t &new_capacity_1,
-    record_t *&new_data_2, uint32_t &new_array_size_2, int32_t &new_capacity_2,
+    std::shared_ptr<record_t[]>&new_data_1, uint32_t &new_array_size_1, int32_t &new_capacity_1,
+    std::shared_ptr<record_t[]>&new_data_2, uint32_t &new_array_size_2, int32_t &new_capacity_2,
     const key_t &key) const {
   uint32_t intermediate_size;
   uint32_t est_size = array_size + buffer->size();
@@ -774,7 +774,7 @@ inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_n_split(
   new_capacity_1 =
       (int32_t)est_size > new_capacity_1 ? est_size : new_capacity_1;
 
-  record_t *intermediate = new record_t[new_capacity_1]();
+  std::shared_ptr<record_t[]>intermediate(new record_t[new_capacity_1]());
   merge_refs_internal(intermediate, intermediate_size);
 
   uint32_t split_pos = exponential_search_key(intermediate, intermediate_size,
@@ -787,7 +787,7 @@ inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_n_split(
 
   new_array_size_2 = intermediate_size - split_pos;
   new_capacity_2 = new_array_size_2 * seq_insert_reserve_factor;
-  new_data_2 = new record_t[new_capacity_2]();
+  new_data_2 = std::shared_ptr<record_t[]>(new record_t[new_capacity_2]());
   memcpy(new_data_2, intermediate + split_pos,
          new_array_size_2 * sizeof(record_t));
 
@@ -797,12 +797,12 @@ inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_n_split(
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_with(
-    const Group &next_group, record_t *&new_data, uint32_t &new_array_size,
+    const Group &next_group, std::shared_ptr<record_t[]>&new_data, uint32_t &new_array_size,
     int32_t &new_capacity) const {
   size_t est_size = array_size + buffer->size() + next_group.array_size +
                     next_group.buffer->size();
   new_capacity = est_size * seq_insert_reserve_factor;
-  new_data = new record_t[new_capacity]();
+  new_data = std::shared_ptr<record_t[]>(new record_t[new_capacity]());
 
   uint32_t real_size_1, real_size_2;
   merge_refs_internal(new_data, real_size_1);
@@ -816,7 +816,7 @@ inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_with(
 // no workers should insert into buffer (frozen) now, so no lock needed
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_internal(
-    record_t *new_data, uint32_t &new_array_size) const {
+    std::shared_ptr<record_t[]>new_data, uint32_t &new_array_size) const {
   size_t count = 0;
 
   auto buffer_source = typename buffer_t::RefSource(buffer);
@@ -871,7 +871,6 @@ inline void Group<key_t, val_t, seq, max_model_n>::merge_refs_internal(
   }
 
   for (size_t rec_i = 0; rec_i < (count == 0 ? 0 : count - 1); rec_i++) {
-    //std::cout<<rec_i<<" "<<new_data[rec_i].first<<" "<<new_data[rec_i + 1].first<<" "<<new_data[rec_i].second.status<<std::endl;
     assert(new_data[rec_i].first < new_data[rec_i + 1].first);
     assert(new_data[rec_i].second.status == new_data[rec_i + 1].second.status);
     assert(new_data[rec_i].second.status == 0x4000000000000000);
@@ -1254,7 +1253,7 @@ inline bool Group<key_t, val_t, seq, max_model_n>::key_less_than(
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 Group<key_t, val_t, seq, max_model_n>::ArrayDataSource::ArrayDataSource(
-    record_t *data, uint32_t array_size, uint32_t pos)
+    std::shared_ptr<record_t[]>data, uint32_t array_size, uint32_t pos)
     : array_size(array_size), pos(pos), data(data) {}
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
@@ -1284,7 +1283,7 @@ const val_t &Group<key_t, val_t, seq, max_model_n>::ArrayDataSource::get_val() {
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
 Group<key_t, val_t, seq, max_model_n>::ArrayRefSource::ArrayRefSource(
-    record_t *data, uint32_t array_size)
+    std::shared_ptr<record_t[]>data, uint32_t array_size)
     : array_size(array_size), pos(0), data(data) {}
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>
@@ -1313,6 +1312,95 @@ template <class key_t, class val_t, bool seq, size_t max_model_n>
 typename Group<key_t, val_t, seq, max_model_n>::atomic_val_t &
 Group<key_t, val_t, seq, max_model_n>::ArrayRefSource::get_val() {
   return *next_val_ptr;
+}
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+void Group<key_t, val_t, seq, max_model_n>::Iterator::SeekToFirst() {
+  uint32_t base_i = group_->get_pos_from_array(key_t::min()); 
+  // set_parameters(data, array_size, base_i);
+  array_source = std::make_shared<ArrayDataSource>(group_->data, group_->array_size, base_i);
+  buffer_source = std::make_shared<typename buffer_t::DataSource>(key_t::min(), group_->buffer);
+  if(group_->buffer_temp != nullptr){
+    temp_buffer_source = std::make_shared<typename buffer_t::DataSource>(key_t::min(), group_->buffer_temp);
+  }
+
+  array_source->advance_to_next_valid();
+  buffer_source->advance_to_next_valid();
+  if(temp_buffer_source){
+    temp_buffer_source->advance_to_next_valid();
+  }
+
+  if(!array_source->has_next && !buffer_source->has_next && 
+    (!temp_buffer_source || !temp_buffer_source->has_next)){
+    valid_ = false;
+  }else{
+    Next();
+    valid_ = true;
+  }
+}
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+bool Group<key_t, val_t, seq, max_model_n>::Iterator::Valid(){
+  return valid_;
+}
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+void Group<key_t, val_t, seq, max_model_n>::Iterator::Next() {
+  using Source = SourceBase<key_t, val_t, seq, max_model_n>;
+
+  auto pick_next = [&]() -> std::shared_ptr<Source> {
+      std::shared_ptr<Source> cand = nullptr;
+
+      if (array_source && array_source->has_next)
+          cand = std::static_pointer_cast<Source>(array_source);
+
+      if (buffer_source && buffer_source->has_next) {
+          if (!cand ||
+              buffer_source->get_key() < cand->get_key()) {
+              cand = std::static_pointer_cast<Source>(buffer_source);
+          }
+      }
+
+      if (temp_buffer_source && temp_buffer_source->has_next) {
+          if (!cand ||
+              temp_buffer_source->get_key() < cand->get_key()) {
+              cand = std::static_pointer_cast<Source>(temp_buffer_source);
+          }
+      }
+
+      return cand; // may be nullptr
+  };
+
+  std::shared_ptr<Source> src = pick_next();
+  assert(src != nullptr);
+
+  // set current result
+  //std::cout<<"src_key:"<<src->get_key()<<std::endl;
+  current_key_   = src->get_key();
+  current_value_ = src->get_val();
+
+  // advance this source
+  src->advance_to_next_valid();
+
+  // check if no more sources have next
+  if ((!array_source || !array_source->has_next) &&
+      (!buffer_source || !buffer_source->has_next) &&
+      (!temp_buffer_source || !temp_buffer_source->has_next)) {
+      valid_ = false;
+      return;
+  }
+
+  valid_ = true;
+}
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+key_t Group<key_t, val_t, seq, max_model_n>::Iterator::Key() {
+  return  current_key_;
+}
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+val_t Group<key_t, val_t, seq, max_model_n>::Iterator::Value() {
+  return  current_value_;
 }
 
 }  // namespace sindex

@@ -125,7 +125,7 @@ inline size_t Root<key_t, val_t, seq>::scan(
   group_t *group = locate_group_pt2(begin, locate_group_pt1(begin, group_i));
   while (remaining && group_i < (int)group_n) {
     while (remaining && group &&
-           group->pivot > latest_group_pivot /* avoid re-entry */) {
+           group->pivot >= latest_group_pivot /* avoid re-entry */) {
       size_t done = group->scan(next_begin, remaining, result);
       assert(done <= remaining);
       remaining -= done;
@@ -787,6 +787,68 @@ inline double Root<key_t, val_t, seq>::train_and_get_err(
     errors += predict_i >= k_i ? (predict_i - k_i) : (k_i - predict_i);
   }
   return errors / key_n;
+}
+
+template <class key_t, class val_t, bool seq>
+inline void Root<key_t, val_t, seq>::Iterator::SeekToFirst() {
+  latest_group_pivot_ = key_t::min();
+  key_t begin = key_t::min();
+  current_group_ = root_->locate_group_pt2(begin, root_->locate_group_pt1(begin, group_i));
+  if(current_group_ != nullptr){
+    group_iterator_ = current_group_->NewIterator();
+    group_iterator_->SeekToFirst();
+    valid_ = true;
+  }else{
+    valid_ =false;
+    group_iterator_ = nullptr;
+  }
+}
+
+template <class key_t, class val_t, bool seq>
+inline void Root<key_t, val_t, seq>::Iterator::Next() {
+  assert(valid_);
+  assert(group_iterator_ != nullptr);
+  group_iterator_->Next();
+  valid_ = group_iterator_->Valid();
+  if (!valid_) {
+      if(current_group_ && current_group_->pivot >= latest_group_pivot_){
+        latest_group_pivot_ = current_group_->pivot;
+        current_group_ = current_group_->next;
+        if(group_iterator_){
+          delete group_iterator_;
+        }
+        group_iterator_ = current_group_ ? current_group_->NewIterator() : nullptr;
+        if(group_iterator_){
+          group_iterator_->SeekToFirst();
+          valid_= group_iterator_->Valid();
+        }
+      }
+      group_i++;
+      if(group_i < (int)root_->group_n){
+        current_group_ = root_->get_group_ptr(group_i);
+        if(group_iterator_){
+          delete group_iterator_;
+        }
+        group_iterator_ = current_group_->NewIterator();
+        group_iterator_->SeekToFirst();
+        valid_ = group_iterator_->Valid();
+      }
+  }
+}
+
+template <class key_t, class val_t, bool seq>
+inline key_t Root<key_t, val_t, seq>::Iterator::Key() {
+  return group_iterator_->Key();
+}
+
+template <class key_t, class val_t, bool seq>
+inline val_t Root<key_t, val_t, seq>::Iterator::Value() {
+  return group_iterator_->Value();
+}
+
+template <class key_t, class val_t, bool seq>
+inline bool Root<key_t, val_t, seq>::Iterator::Valid() {
+  return valid_;
 }
 
 }  // namespace sindex
