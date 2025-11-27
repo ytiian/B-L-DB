@@ -62,6 +62,11 @@ class EmptyIterator : public Iterator {
   }
   Status status() const override { return status_; }
 
+  void NextIndex() override {}
+  Slice indexKey() const override {}
+  bool IndexValid() const override {}
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
  private:
   Status status_;
 };

@@ -1203,7 +1203,7 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   versions_->current()->AddIterators(options, &list, index_map);
   //versions_->current()->AddRunsIterators(options, &list, )
   Iterator* disk_iter = 
-      NewDiskIterator(&internal_comparator_, &list[0], list.size(), sindex_, index_map);
+      NewDiskIterator(internal_comparator_.user_comparator(), &list[0], list.size(), sindex_, index_map);
   list_all.push_back(disk_iter);
     //std::cout<<"all size:"<<list_all.size()<<std::endl;
   Iterator* internal_iter =

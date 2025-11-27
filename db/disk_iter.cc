@@ -3,10 +3,12 @@
 #include "leveldb/comparator.h"
 #include "leveldb/iterator.h"
 #include "table/iterator_wrapper.h"
+#include "table/two_level_iterator.h"
 #include "sindex/sindex_wrapper.h"
 #include "db/dbformat.h"
 #include "db/dbformat.h"
 #include <unordered_map>
+#include <chrono>
 
 namespace leveldb {
 namespace{
@@ -24,7 +26,7 @@ class DiskIterator : public Iterator {
     for (int i = 0; i < n; i++) {
       children_[i].Set(children[i]);
     }
-    index_iter_ = sindex->NewIterator(1);//[todo]
+    index_iter_ = sindex->NewIterator(2);//[todo]
   }
 
   ~DiskIterator() override { 
@@ -144,23 +146,49 @@ class DiskIterator : public Iterator {
     assert(iter != index_map_->end());
     index = iter->second;
     //std::cout<<"search key:"<<index_iter_->Key().ToString()<<" run_no:"<<run_no<<" index:"<<index<<std::endl;
+    
+    std::string sindex_key_str = index_iter_->Key().ToString();
+    const Slice& sindex_target_key = Slice(sindex_key_str);    
+
+    bool init = false;
+    while(comparator_->Compare(ExtractUserKey(children_[index].indexKey()), sindex_target_key) < 0){
+      children_[index].NextIndex();
+      init = true;
+    }
+
+    if(init){
+      children_[index].ResetDataBlock();
+    }
+   
+    
     Slice internal_key_ = children_[index].key();
-    Slice user_key = Slice(internal_key_.data(), internal_key_.size() - 8);
-    std::string user_key_str = index_iter_->Key().ToString();
-    const Slice& target_key = Slice(user_key_str);
-    //std::cout<<user_key.ToString()<<" "<<target_key.ToString()<<std::endl;
-    while(comparator_->Compare(user_key, target_key) != 0){
-      //std::cout<<" target key:"<<target_key.ToString()<<" user_key:"<<user_key.ToString()<<std::endl;
+    Slice user_key = ExtractUserKey(internal_key_);
+
+    assert(user_key.size() == sindex_target_key.size());
+    while(comparator_->Compare(user_key, sindex_target_key) != 0){
+      assert(user_key.size() == sindex_target_key.size());
+      if(comparator_->Compare(user_key, sindex_target_key) > 0){
+        std::cout<<"error: user_key:"<<user_key.ToString()<<" sindex_key:"<<sindex_target_key.ToString()<<"compare: "<<comparator_->Compare(user_key, sindex_target_key)<<std::endl;
+        return ;
+      }
       children_[index].Next();
-      // if(!children_[index].Valid()){
-      //   break;
-      // }
       internal_key_ = children_[index].key();
-      user_key = Slice(internal_key_.data(), internal_key_.size() - 8);
+      user_key = ExtractUserKey(internal_key_);
     }
 
     current_ = &children_[index];
   }
+
+    void NextIndex() override {}
+    Slice indexKey() const override {
+      return Slice();
+    }
+    bool IndexValid() const override {
+      return false;
+    }
+    void ResetDataBlock() override {}
+    bool IsIndex() override {}
+
  private:
   enum Direction { kForward, kReverse }; 
   const Comparator* comparator_;

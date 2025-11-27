@@ -67,6 +67,16 @@ class MemTableIterator : public Iterator {
 
   Status status() const override { return Status::OK(); }
 
+  void NextIndex() override {}
+  Slice indexKey() const override {
+    return Slice();
+  }
+  bool IndexValid() const override {
+    return false;
+  }
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
+
  private:
   MemTable::Table::Iterator iter_;
   std::string tmp_;  // For passing to EncodeKey

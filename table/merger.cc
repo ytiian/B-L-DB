@@ -138,7 +138,11 @@ class MergingIterator : public Iterator {
     }
     return status;
   }
-
+  void NextIndex() override {}
+  Slice indexKey() const override {}
+  bool IndexValid() const override {}
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
  private:
   // Which direction is the iterator moving?
   enum Direction { kForward, kReverse };

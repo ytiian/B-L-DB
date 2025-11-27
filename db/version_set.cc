@@ -265,6 +265,18 @@ class Version::LevelFileNumIterator : public Iterator {
   }
   Status status() const override { return Status::OK(); }
 
+  void NextIndex() override {
+    Next();
+  }
+  Slice indexKey() const override {
+    return Slice();
+  }
+  bool IndexValid() const override {
+    return Valid();
+  }
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
+
  private:
   const InternalKeyComparator icmp_;
   const std::vector<FileMetaData*>* const flist_;

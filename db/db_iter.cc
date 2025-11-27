@@ -77,6 +77,12 @@ class DBIter : public Iterator {
     }
   }
 
+  void NextIndex() override {}
+  Slice indexKey() const override {}
+  bool IndexValid() const override {}
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
+
   void Next() override;
   void Prev() override;
   void Seek(const Slice& target) override;

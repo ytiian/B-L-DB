@@ -2190,8 +2190,14 @@ class ModelDB : public DB {
     Slice key() const override { return iter_->first; }
     Slice value() const override { return iter_->second; }
     Status status() const override { return Status::OK(); }
+    
+    void NextIndex() override {}
+    Slice indexKey() const override {}
+    bool IndexValid() const override {}
+    void ResetDataBlock() override {}
+    bool IsIndex() override {}
 
-   private:
+    private:
     const KVMap* const map_;
     const bool owned_;  // Do we own map_
     KVMap::const_iterator iter_;

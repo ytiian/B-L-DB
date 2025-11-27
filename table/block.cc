@@ -93,6 +93,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
 
 class Block::Iter : public Iterator {
  private:
+  bool is_data_block_;
   const Comparator* const comparator_;
   const char* const data_;       // underlying block contents
   uint32_t const restarts_;      // Offset of restart array (list of fixed32)
@@ -138,14 +139,34 @@ class Block::Iter : public Iterator {
  public:
  //data：BlockContents的具体内容，restarts是restart array开始的地方
   Iter(const Comparator* comparator, const char* data, uint32_t restarts,
-       uint32_t num_restarts)
+       uint32_t num_restarts, const bool is_data_block)
       : comparator_(comparator),
         data_(data),
         restarts_(restarts),
         num_restarts_(num_restarts),
         current_(restarts_),//初始化为restart array开始的位置
-        restart_index_(num_restarts_) {//初始化为最大值的restart编号
+        restart_index_(num_restarts_),
+        is_data_block_(is_data_block) {//初始化为最大值的restart编号
     assert(num_restarts_ > 0);
+  }
+
+  void NextIndex() override {
+    Next();
+  }
+  Slice indexKey() const override {
+    assert(IndexValid());
+    return key();
+  }
+  bool IndexValid() const override {
+    if(is_data_block_){
+      return false;
+    }
+    return Valid();
+  }
+  void ResetDataBlock() override {}
+
+  bool IsIndex() override {
+    return !is_data_block_;
   }
 
 //如果条目在restart数组之前 说明是有效的
@@ -317,7 +338,7 @@ class Block::Iter : public Iterator {
 };
 
 //在块上新建一个迭代器(属于Block类的方法)
-Iterator* Block::NewIterator(const Comparator* comparator) {
+Iterator* Block::NewIterator(const Comparator* comparator, const bool is_data_block) {
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));
   }
@@ -325,7 +346,7 @@ Iterator* Block::NewIterator(const Comparator* comparator) {
   if (num_restarts == 0) {
     return NewEmptyIterator();
   } else {
-    return new Iter(comparator, data_, restart_offset_, num_restarts);
+    return new Iter(comparator, data_, restart_offset_, num_restarts, is_data_block);
   }
 }
 

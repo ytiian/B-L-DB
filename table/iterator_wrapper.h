@@ -31,6 +31,7 @@ class IteratorWrapper {
       valid_ = false;
     } else {
       Update();
+      UpdateIndex();
     }
   }
 
@@ -53,6 +54,7 @@ class IteratorWrapper {
     assert(iter_);
     iter_->Next();
     Update();
+    UpdateIndex();
   }
   void Prev() {
     assert(iter_);
@@ -65,14 +67,42 @@ class IteratorWrapper {
     Update();
   }
   void SeekToFirst() {
+    //std::cout<<"iter SeekToFirst"<<std::endl;
     assert(iter_);
     iter_->SeekToFirst();
     Update();
+    UpdateIndex();
   }
   void SeekToLast() {
     assert(iter_);
     iter_->SeekToLast();
     Update();
+  }
+
+
+  void NextIndex(){
+    assert(iter_);
+    iter_->NextIndex();
+    UpdateIndex();
+    Update();
+  }
+
+  void ResetDataBlock(){
+    assert(iter_);
+    iter_->ResetDataBlock();
+  }
+
+  Slice indexKey() const {
+    assert(IndexValid());
+    return index_key_;
+  }
+
+  bool IsIndex() {
+    return iter_->IsIndex();
+  }
+
+  bool IndexValid() const {
+    return index_valid_;
   }
 
  private:
@@ -85,9 +115,24 @@ class IteratorWrapper {
     }
   }
 
+  void UpdateIndex(){
+    //index_valid_ = iter_->IndexValid();
+    //if (index_valid_) {
+    index_valid_ = iter_->IndexValid();
+    if(index_valid_){
+      index_key_ = iter_->indexKey();
+    }else{
+      index_key_ = Slice();
+    } 
+  }
+
+
   Iterator* iter_;
   bool valid_;
   Slice key_;
+
+  bool index_valid_;
+  Slice index_key_;
 };
 
 }  // namespace leveldb

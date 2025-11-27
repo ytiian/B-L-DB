@@ -17,6 +17,7 @@
 #include "table/format.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#include "db/dbformat.h"
 
 namespace leveldb {
 
@@ -116,7 +117,7 @@ void Table::ReadMeta(const Footer& footer) {
   Block* meta = new Block(contents);
 
   //在meta block上构建迭代器
-  Iterator* iter = meta->NewIterator(BytewiseComparator());
+  Iterator* iter = meta->NewIterator(BytewiseComparator(), false);
   //构造filter block的名字
   std::string key = "filter.";
   key.append(rep_->options.filter_policy->Name());
@@ -233,7 +234,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
   if (block != nullptr) {
     //这里的NewIterator是Block类的方法，在函数内部会用Block对象内保存的信息构造迭代器
     //..return new Iter(comparator, data_, restart_offset_, num_restarts);
-    iter = block->NewIterator(table->rep_->options.comparator);
+    iter = block->NewIterator(table->rep_->options.comparator, true);
     if (cache_handle == nullptr) {
       iter->RegisterCleanup(&DeleteBlock, block, nullptr);
     } else {
@@ -248,7 +249,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
 
 Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
-      rep_->index_block->NewIterator(rep_->options.comparator),//构造index_block上的迭代器
+      rep_->index_block->NewIterator(rep_->options.comparator, false),//构造index_block上的迭代器
       &Table::BlockReader, const_cast<Table*>(this), options);//BlockReader函数，index value->data block iter
       //this 把这个对象传给NewTwoLevelIterator函数（在这个table对象上构造的）
 }
@@ -259,10 +260,13 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
                                                 const Slice&)) {
   Status s;
   //iiter在index_block上的迭代器
-  Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
+  Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator, false);
   //定位条目
   iiter->Seek(k);
   if (iiter->Valid()) {
+    // Slice target_key = ExtractUserKey(k);
+    // Slice index_key = ExtractUserKey(iiter->key());
+    // std::cout<<"get target:"<<target_key.ToString()<<" index block key:"<<index_key.ToString()<<std::endl;
     //条目的值就是目标data block的handle
     Slice handle_value = iiter->value();
     FilterBlockReader* filter = rep_->filter;
@@ -294,7 +298,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
 //key在table中的大概的偏移量
 uint64_t Table::ApproximateOffsetOf(const Slice& key) const {
   Iterator* index_iter =
-      rep_->index_block->NewIterator(rep_->options.comparator);
+      rep_->index_block->NewIterator(rep_->options.comparator, false);
   //先定位block
   index_iter->Seek(key);
   uint64_t result;

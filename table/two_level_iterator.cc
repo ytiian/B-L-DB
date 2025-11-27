@@ -16,65 +16,8 @@
 
 namespace leveldb {
 
-namespace {
-
 //定义函数指针的方式
 //定义指针BlockFunction，指向返回值为Iterator* 三个形参的函数
-typedef Iterator* (*BlockFunction)(void*, const ReadOptions&, const Slice&);
-
-class TwoLevelIterator : public Iterator {
- public:
-  //block_function 传递某个函数
-  TwoLevelIterator(Iterator* index_iter, BlockFunction block_function,
-                   void* arg, const ReadOptions& options);
-  ~TwoLevelIterator() override;
-
-  void Seek(const Slice& target) override;
-  void SeekToFirst() override;
-  void SeekToLast() override;
-  void Next() override;
-  void Prev() override;
-
-  //data_iter是IteratorWrapper类型
-  bool Valid() const override { return data_iter_.Valid(); }
-  Slice key() const override {
-    assert(Valid());
-    return data_iter_.key();
-  }
-  Slice value() const override {
-    assert(Valid());
-    return data_iter_.value();
-  }
-  Status status() const override {
-    // It'd be nice if status() returned a const Status& instead of a Status
-    if (!index_iter_.status().ok()) {
-      return index_iter_.status();
-    } else if (data_iter_.iter() != nullptr && !data_iter_.status().ok()) {
-      return data_iter_.status();
-    } else {
-      return status_;
-    }
-  }
-
- private:
-  void SaveError(const Status& s) {
-    if (status_.ok() && !s.ok()) status_ = s;
-  }
-  void SkipEmptyDataBlocksForward();
-  void SkipEmptyDataBlocksBackward();
-  void SetDataIterator(Iterator* data_iter);
-  void InitDataBlock();
-
-  BlockFunction block_function_;
-  void* arg_;
-  const ReadOptions options_;
-  Status status_;
-  IteratorWrapper index_iter_;
-  IteratorWrapper data_iter_;  // May be nullptr
-  // If data_iter_ is non-null, then "data_block_handle_" holds the
-  // "index_value" passed to block_function_ to create the data_iter_.
-  std::string data_block_handle_;
-};
 
 TwoLevelIterator::TwoLevelIterator(Iterator* index_iter,
                                    BlockFunction block_function, void* arg,
@@ -99,8 +42,12 @@ void TwoLevelIterator::Seek(const Slice& target) {
 //先定位第一个data block，再定位这个block的第一条
 void TwoLevelIterator::SeekToFirst() {
   index_iter_.SeekToFirst();
+  //std::cout<<"SeekToFirst"<<std::endl;
   InitDataBlock();
   if (data_iter_.iter() != nullptr) data_iter_.SeekToFirst();
+  if(data_iter_.iter() != nullptr && data_iter_.Valid()){
+    //std::cout<<data_iter_.key()<<std::endl;
+  }
   SkipEmptyDataBlocksForward();
 }
 
@@ -117,6 +64,7 @@ void TwoLevelIterator::Next() {
   data_iter_.Next();
   //即使data_iter_.Next()失败（也就是读完了全部，没得可读）
   //下面这个函数会继续向前寻找下一个可读的block
+  //std::cout<<"Next"<<std::endl;
   SkipEmptyDataBlocksForward();
 }
 
@@ -136,6 +84,7 @@ void TwoLevelIterator::SkipEmptyDataBlocksForward() {
     }
     index_iter_.Next();
     InitDataBlock();
+    //std::cout<<"SkipEmptyDataBlocksForward"<<std::endl;
     //定位到新data block的第一条
     if (data_iter_.iter() != nullptr) data_iter_.SeekToFirst();
   }
@@ -165,6 +114,7 @@ void TwoLevelIterator::InitDataBlock() {
   if (!index_iter_.Valid()) {
     SetDataIterator(nullptr);
   } else {
+    //std::cout<<"index kye:"<<index_iter_.key()<<std::endl;
     //index_iter_现在指向的条目是所找data block的handle
     Slice handle = index_iter_.value();
     //现在data_iter_恰好指向的是将要查询的data block
@@ -176,6 +126,7 @@ void TwoLevelIterator::InitDataBlock() {
     } else {
       //block_function_是函数指针，因此需要*
       //构造一个指向data block的迭代器
+      //std::cout<<"new block"<<std::endl;
       Iterator* iter = (*block_function_)(arg_, options_, handle);
       data_block_handle_.assign(handle.data(), handle.size());
       SetDataIterator(iter);
@@ -183,7 +134,63 @@ void TwoLevelIterator::InitDataBlock() {
   }
 }
 
-}  // namespace
+void TwoLevelIterator::NextIndex()  {
+  if(data_iter_.IndexValid()){
+    data_iter_.NextIndex();
+  }else{
+    index_iter_.NextIndex();
+    if(data_iter_.IsIndex()){
+      InitDataBlock();
+      if (data_iter_.iter() != nullptr) data_iter_.SeekToFirst();
+      SkipEmptyDataBlocksForward();
+    }
+    //ResetDataBlock();
+  }
+  //SkipEmptyIndexForward();
+}
+
+Slice TwoLevelIterator::indexKey() const {
+  if(data_iter_.IndexValid()){
+    return data_iter_.indexKey();
+  }
+  return index_iter_.key();
+}
+
+bool TwoLevelIterator::IndexValid() const {
+  if(data_iter_.IndexValid()){
+    //std::cout<<"data_iter_.IndexValid() true"<<std::endl;
+    return true;
+  }
+  //std::cout<<"index_iter_.Valid():"<<index_iter_.Valid()<<std::endl;
+  return index_iter_.Valid();
+}
+
+void TwoLevelIterator::ResetDataBlock() {
+  if(data_iter_.IsIndex()){
+    data_iter_.ResetDataBlock();
+  }else{
+    InitDataBlock();
+    if (data_iter_.iter() != nullptr) data_iter_.SeekToFirst();
+    SkipEmptyDataBlocksForward();
+    //std::cout<<"data_iter_ key"<<data_iter_.key()<<std::endl;
+  }
+}
+
+void TwoLevelIterator::SkipEmptyIndexForward(){
+  if(!data_iter_.IndexValid()){
+    if(index_iter_.IndexValid()){
+      index_iter_.NextIndex();
+    }else{
+      //index_valid_ = false;
+      assert(false);
+      return;
+    }
+  }  
+}
+
+bool TwoLevelIterator::IsIndex() {
+  return true;
+}
 
 Iterator* NewTwoLevelIterator(Iterator* index_iter,
                               BlockFunction block_function, void* arg,

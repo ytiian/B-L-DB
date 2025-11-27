@@ -196,7 +196,7 @@ class BlockConstructor : public Constructor {
     return Status::OK();
   }
   Iterator* NewIterator() const override {
-    return block_->NewIterator(comparator_);
+    return block_->NewIterator(comparator_, true);
   }
 
  private:
@@ -291,7 +291,11 @@ class KeyConvertingIterator : public Iterator {
   Status status() const override {
     return status_.ok() ? iter_->status() : status_;
   }
-
+  void NextIndex() override {}
+  Slice indexKey() const override {}
+  bool IndexValid() const override {}
+  void ResetDataBlock() override {}
+  bool IsIndex() override {}
  private:
   mutable Status status_;
   Iterator* iter_;
@@ -628,7 +632,7 @@ TEST_F(Harness, ZeroRestartPointsInBlock) {
   contents.cachable = false;
   contents.heap_allocated = false;
   Block block(contents);
-  Iterator* iter = block.NewIterator(BytewiseComparator());
+  Iterator* iter = block.NewIterator(BytewiseComparator(), false);
   iter->SeekToFirst();
   ASSERT_TRUE(!iter->Valid());
   iter->SeekToLast();

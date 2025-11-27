@@ -28,7 +28,7 @@ class Block {
   ~Block();
 
   size_t size() const { return size_; }
-  Iterator* NewIterator(const Comparator* comparator);
+  Iterator* NewIterator(const Comparator* comparator, const bool is_data_block);
 
  private:
   class Iter;
