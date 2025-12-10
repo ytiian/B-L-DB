@@ -139,6 +139,8 @@ class Version {
 
   SortedRun* GetMapRun(uint64_t id);
 
+  void PrintLiveTime();
+
  private:
   friend class Compaction;
   friend class VersionSet;
@@ -167,6 +169,7 @@ class Version {
   // false, makes no more calls.
   //
   // REQUIRES: user portion of internal_key == user_key.
+
   void ForEachOverlapping(SortedRun* search_run, Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 

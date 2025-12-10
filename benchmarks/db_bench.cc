@@ -633,6 +633,8 @@ class Benchmark {
         PrintStats("leveldb.stats");
       } else if (name == Slice("sstables")) {
         PrintStats("leveldb.sstables");
+      } else if (name == Slice("live-time")){
+        PrintStats("leveldb.live-time");
       } else if (name == Slice("loadworkload")) {
         std::string trace_name = FLAGS_trace + "/warm.txt";
         LoadTrace(trace_name);

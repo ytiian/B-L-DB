@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <unordered_map>
+#include <chrono>
 
 #include "db/run_manager.h"
 #include "db/filename.h"
@@ -22,6 +23,7 @@
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
 #include "util/logging.h"
+
 
 namespace leveldb {
 
@@ -443,6 +445,23 @@ Status Version::RebuildSIndex(SIndexWrapper* sindex){
   return Status::OK();
 }
 
+
+void Version::PrintLiveTime(){
+  for(int i = config::kNumLevels - 1; i >= 0; i--){
+    for(int j = 0; j < runs_[i].size(); j++){
+      const SortedRun* run = runs_[i][j];
+
+      uint64_t now_micros =
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              std::chrono::system_clock::now().time_since_epoch()
+          ).count();
+
+      double live_ms = (now_micros - run->create_time_micros) / 1000.0;
+
+      std::cout<<"Compaction delete run "<<run->GetID()<<" in level " <<run->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<run->GetFileNum() << std::endl;      
+    }
+  }  
+}
 
 //对每个包含use key的文件调用func函数
 void Version::ForEachOverlapping(SortedRun* search_run, Slice user_key, Slice internal_key, void* arg,
@@ -1924,8 +1943,17 @@ Compaction::~Compaction() {
 
 //所有参与compaction的Run都要加入待删除
 void Compaction::AddRunDeletions(VersionEdit* edit){
+  std::cout<<"delete number:"<<inputs_runs_.size()<<std::endl;
   for(size_t i = 0; i < inputs_runs_.size(); i++){
     edit->RemoveRun(inputs_runs_[i]);
+    uint64_t now_micros =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+
+    double live_ms = (now_micros - inputs_runs_[i]->create_time_micros) / 1000.0;
+
+    std::cout<<"Compaction delete run "<<inputs_runs_[i]->GetID()<<" in level " <<inputs_runs_[i]->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<inputs_runs_[i]->GetFileNum() << std::endl; 
   }
 }
 //当key的type是delete的时候

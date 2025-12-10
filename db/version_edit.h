@@ -75,7 +75,14 @@ class SortedRun{//结构1
     return run_to_L0_file_;
   }
 
+  // int GetFileNum() const{
+  //   return contain_file_->size();
+  // }
+
   int ref_;
+
+  // uint64_t create_time_micros;
+  // uint64_t delete_time_micros;
 
  protected:
   uint64_t id_;

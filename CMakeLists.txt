@@ -311,13 +311,13 @@ set(FMT_LIBRARIES "/usr/local/lib/libfmt.a")
 set(FOLLY_INCLUDE_DIRS "/usr/local/include/folly")
 set(FOLLY_LIBRARIES "/usr/local/lib/libfolly.a")
 
-set(JEMALLOC_DIR "/usr/lib/x86_64-linux-gnu")
+# set(JEMALLOC_DIR "/usr/lib/x86_64-linux-gnu")
 set(MKL_LINK_DIRECTORY "/usr/lib/x86_64-linux-gnu/mkl")
 set(MKL_INCLUDE_DIRECTORY "/usr/include/mkl")
 
-link_directories(${JEMALLOC_DIR})
+# link_directories(${JEMALLOC_DIR})
 link_directories(${MKL_LINK_DIRECTORY})
-link_libraries(jemalloc)
+# link_libraries(jemalloc)
 
 include_directories(${MKL_INCLUDE_DIRECTORY})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

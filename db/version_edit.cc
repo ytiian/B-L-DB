@@ -163,6 +163,8 @@ void VersionEdit::EncodeRun(std::string* dst, const SortedRun& run) const{
   PutVarint64(dst, run.GetID());
   PutVarint32(dst, run.GetLevel());
   PutVarint32(dst, files->size());
+  // PutVarint64(dst, run.create_time_micros);
+  // //std::cout<<" create_time:"<<run.create_time_micros<<std::endl;
   //std::cout<<"file->size():"<<files->size()<<std::endl;
   for(size_t j = 0; j < files->size(); j++){
     const FileMetaData& f = *(files->at(j));
@@ -196,6 +198,14 @@ bool VersionEdit::DecodeRun(Slice* input, SortedRun* run){
   if(!GetVarint32(input, &file_num)){
     std::cout<<"file num wrong"<<std::endl;     
   }
+
+  // uint64_t create_time;
+  // if(!GetVarint64(input, &create_time)){
+  //   //std::cout<<"create time wrong"<<std::endl;     
+  // }
+  // run->create_time_micros = create_time;
+  // //std::cout<<" decode create_time:"<<create_time<<std::endl;
+
   int file_level;
   FileMetaData f;
   //std::cout<<"file_num:"<<file_num<<std::endl;

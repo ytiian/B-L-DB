@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -598,6 +599,10 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     //更新edit，把文件放置在L0层
     edit->SetLevel(-1, 0);
     SortedRun run= versions_->NewRun(0);
+    // uint64_t now_micros = std::chrono::duration_cast<std::chrono::microseconds>(
+    //         std::chrono::system_clock::now().time_since_epoch()).count();
+
+    // run.create_time_micros = now_micros;      
     edit->AddRun(run);
     edit->AddFileToRun(meta.number, meta.file_size, meta.smallest,
                   meta.largest);
@@ -963,6 +968,10 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   //在edit中记录新生成了一个run
   compact->compaction->edit()->SetLevel(input_level, output_level);
   SortedRun run = versions_->NewRun(output_level);
+  // uint64_t now_micros = std::chrono::duration_cast<std::chrono::microseconds>(
+  //         std::chrono::system_clock::now().time_since_epoch()).count();
+
+  // run.create_time_micros = now_micros;  
   compact->compaction->edit()->AddRun(run);
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
@@ -972,6 +981,8 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
                                          //out.smallest, out.largest);
 
   }
+
+  //std::cout<<"Compaction output run "<<run.GetID()<<" in level " <<output_level<< " has files number :"<<compact->outputs.size()<<std::endl;
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
 
@@ -1591,6 +1602,9 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     std::snprintf(buf, sizeof(buf), "%llu",
                   static_cast<unsigned long long>(total_usage));
     value->append(buf);
+    return true;
+  } else if (in == "live-time"){
+    versions_->current()->PrintLiveTime();
     return true;
   }
 
