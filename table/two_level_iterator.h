@@ -14,13 +14,13 @@ namespace leveldb {
 
 struct ReadOptions;
 
-typedef Iterator* (*BlockFunction)(void*, const ReadOptions&, const Slice&);
+typedef Iterator* (*BlockFunction)(void*, const ReadOptions&, const Slice&, const bool&);
 
 class TwoLevelIterator : public Iterator {
  public:
   //block_function 传递某个函数
   TwoLevelIterator(Iterator* index_iter, BlockFunction block_function,
-                   void* arg, const ReadOptions& options);
+                   void* arg, const ReadOptions& options, const bool& is_model);
   ~TwoLevelIterator() override;
 
   void Seek(const Slice& target) override;
@@ -82,6 +82,7 @@ class TwoLevelIterator : public Iterator {
   // If data_iter_ is non-null, then "data_block_handle_" holds the
   // "index_value" passed to block_function_ to create the data_iter_.
   std::string data_block_handle_;
+  const bool is_model_;
 };
 
 // Return a new two level iterator.  A two-level iterator contains an
@@ -96,8 +97,8 @@ class TwoLevelIterator : public Iterator {
 Iterator* NewTwoLevelIterator(
     Iterator* index_iter,
     Iterator* (*block_function)(void* arg, const ReadOptions& options,
-                                const Slice& index_value),
-    void* arg, const ReadOptions& options);
+                                const Slice& index_value, const bool& is_model),
+    void* arg, const ReadOptions& options, const bool& is_model);
 
 }  // namespace leveldb
 

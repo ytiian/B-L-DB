@@ -22,14 +22,14 @@
 namespace leveldb {
 
 //从buffer_中得到restart点的数量
-inline uint32_t Block::NumRestarts() const {
+inline uint32_t PrefixBlock::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
   //指针移动到记录restart数量开始的地方(data_是const char*)
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
 }
 
 //初始化Block，保存实际内容、长度、restart array开始的位置
-Block::Block(const BlockContents& contents)
+PrefixBlock::PrefixBlock(const BlockContents& contents)
     : data_(contents.data.data()),
       size_(contents.data.size()),
       owned_(contents.heap_allocated) {
@@ -53,7 +53,7 @@ Block::Block(const BlockContents& contents)
   }
 }
 
-Block::~Block() {
+PrefixBlock::~PrefixBlock() {
   if (owned_) {
     delete[] data_;
   }
@@ -91,7 +91,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
 }
 
 
-class Block::Iter : public Iterator {
+class PrefixBlock::Iter : public Iterator {
  private:
   bool is_data_block_;
   const Comparator* const comparator_;
@@ -338,7 +338,7 @@ class Block::Iter : public Iterator {
 };
 
 //在块上新建一个迭代器(属于Block类的方法)
-Iterator* Block::NewIterator(const Comparator* comparator, const bool is_data_block) {
+Iterator* PrefixBlock::NewIterator(const Comparator* comparator, const bool is_data_block) {
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));
   }

@@ -21,12 +21,13 @@ namespace leveldb {
 
 TwoLevelIterator::TwoLevelIterator(Iterator* index_iter,
                                    BlockFunction block_function, void* arg,
-                                   const ReadOptions& options)
+                                   const ReadOptions& options, const bool& is_model)
     : block_function_(block_function),
       arg_(arg),
       options_(options),
       index_iter_(index_iter),
-      data_iter_(nullptr) {}
+      data_iter_(nullptr),
+      is_model_(is_model) {}
 
 TwoLevelIterator::~TwoLevelIterator() = default;
 
@@ -127,7 +128,7 @@ void TwoLevelIterator::InitDataBlock() {
       //block_function_是函数指针，因此需要*
       //构造一个指向data block的迭代器
       //std::cout<<"new block"<<std::endl;
-      Iterator* iter = (*block_function_)(arg_, options_, handle);
+      Iterator* iter = (*block_function_)(arg_, options_, handle, is_model_);
       data_block_handle_.assign(handle.data(), handle.size());
       SetDataIterator(iter);
     }
@@ -194,8 +195,8 @@ bool TwoLevelIterator::IsIndex() {
 
 Iterator* NewTwoLevelIterator(Iterator* index_iter,
                               BlockFunction block_function, void* arg,
-                              const ReadOptions& options) {
-  return new TwoLevelIterator(index_iter, block_function, arg, options);
+                              const ReadOptions& options, const bool& is_model) {
+  return new TwoLevelIterator(index_iter, block_function, arg, options, is_model);
 }
 
 }  // namespace leveldb

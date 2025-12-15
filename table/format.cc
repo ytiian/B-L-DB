@@ -32,6 +32,49 @@ Status BlockHandle::DecodeFrom(Slice* input) {
   }
 }
 
+void ModelParam::EncodeTo(std::string* dst) const {
+  char buf[sizeof(double)*2];
+  EncodeFixed64(buf, *reinterpret_cast<const uint64_t*>(&slope_));
+  EncodeFixed64(buf + sizeof(double), *reinterpret_cast<const uint64_t*>(&intercept_));
+  dst->append(buf, sizeof(buf));
+}
+
+Status ModelParam::DecodeFrom(Slice* input) {
+  if (input->size() < sizeof(double)*2) {
+    return Status::Corruption("bad model param");
+  }
+  slope_ = *reinterpret_cast<const double*>(input->data());
+  intercept_ = *reinterpret_cast<const double*>(input->data() + sizeof(double));
+  return Status::OK();
+}
+
+//写handle（写入dst）
+void IndexHandle::EncodeTo(std::string* dst) const {
+  // Sanity check that all fields have been set
+  assert(offset_ != ~static_cast<uint64_t>(0));
+  assert(size_ != ~static_cast<uint64_t>(0));
+  assert(index_ != ~static_cast<uint32_t>(0));
+  PutVarint64(dst, offset_);
+  PutVarint64(dst, size_);
+  PutVarint32(dst, index_);
+}
+
+//读handle（从input读）
+Status IndexHandle::DecodeFrom(Slice* input) {
+  if (GetVarint64(input, &offset_) && GetVarint64(input, &size_) && GetVarint32(input, &index_)) {
+    return Status::OK();
+  } else {
+    return Status::Corruption("bad block handle");
+  }
+}
+
+void IndexHandle::SetFromBlockHandle(const BlockHandle& bh, uint32_t index) {
+  offset_ = bh.offset();
+  size_ = bh.size();
+  index_ = index;
+}
+
+
 //写footer（写入dst）
 void Footer::EncodeTo(std::string* dst) const {
   const size_t original_size = dst->size();

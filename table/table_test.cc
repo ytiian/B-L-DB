@@ -181,18 +181,18 @@ class BlockConstructor : public Constructor {
   Status FinishImpl(const Options& options, const KVMap& data) override {
     delete block_;
     block_ = nullptr;
-    BlockBuilder builder(&options);
+    BlockBuilder* builder = new PrefixBlockBuilder(&options);
 
     for (const auto& kvp : data) {
-      builder.Add(kvp.first, kvp.second);
+      builder->Add(kvp.first, kvp.second);
     }
     // Open the block
-    data_ = builder.Finish().ToString();
+    data_ = builder->Finish().ToString();
     BlockContents contents;
     contents.data = data_;
     contents.cachable = false;
     contents.heap_allocated = false;
-    block_ = new Block(contents);
+    block_ = new PrefixBlock(contents);
     return Status::OK();
   }
   Iterator* NewIterator() const override {
@@ -215,7 +215,7 @@ class TableConstructor : public Constructor {
   Status FinishImpl(const Options& options, const KVMap& data) override {
     Reset();
     StringSink sink;
-    TableBuilder builder(options, &sink);
+    TableBuilder builder(options, &sink, false);
 
     for (const auto& kvp : data) {
       builder.Add(kvp.first, kvp.second);
@@ -631,7 +631,7 @@ TEST_F(Harness, ZeroRestartPointsInBlock) {
   contents.data = Slice(data, sizeof(data));
   contents.cachable = false;
   contents.heap_allocated = false;
-  Block block(contents);
+  PrefixBlock block(contents);
   Iterator* iter = block.NewIterator(BytewiseComparator(), false);
   iter->SeekToFirst();
   ASSERT_TRUE(!iter->Valid());

@@ -22,6 +22,51 @@ struct ReadOptions;
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
 //指向data block或meta block
+class IndexHandle {
+ public:
+  // Maximum encoding length of a BlockHandle
+  // BlockHandle的最大编码长度
+  enum { kMaxEncodedLength = 10 + 10 };
+
+  IndexHandle();
+
+  // The offset of the block in the file.
+  uint64_t offset() const { return offset_; }
+  void set_offset(uint64_t offset) { offset_ = offset; }
+
+  // The size of the stored block
+  uint64_t size() const { return size_; }
+  void set_size(uint64_t size) { size_ = size; }
+
+  uint32_t index() const { return index_; }
+
+  void EncodeTo(std::string* dst) const;
+  Status DecodeFrom(Slice* input);
+
+  void SetFromBlockHandle(const BlockHandle& bh, uint32_t index);
+
+ private:
+  uint64_t offset_;//偏移量
+  uint64_t size_;//大小
+  uint32_t index_;
+};
+
+class ModelParam{
+  public:
+    ModelParam():slope_(0.0),intercept_(0.0){}
+    ModelParam(double slope, double intercept):slope_(slope),intercept_(intercept){}
+
+    uint64_t slope() const { return slope_; }
+    uint64_t intercept() const { return intercept_; }
+
+    void EncodeTo(std::string* dst) const;
+    Status DecodeFrom(Slice* input);    
+    
+  private:
+    double slope_;
+    double intercept_;
+};
+
 class BlockHandle {
  public:
   // Maximum encoding length of a BlockHandle
@@ -97,6 +142,9 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
 
 inline BlockHandle::BlockHandle()
     : offset_(~static_cast<uint64_t>(0)), size_(~static_cast<uint64_t>(0)) {}
+
+inline IndexHandle::IndexHandle()
+    : offset_(~static_cast<uint64_t>(0)), size_(~static_cast<uint64_t>(0)), index_(0) {}
 
 }  // namespace leveldb
 

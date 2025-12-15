@@ -17,30 +17,53 @@ struct Options;
 
 class BlockBuilder {
  public:
-  explicit BlockBuilder(const Options* options);
-
-  BlockBuilder(const BlockBuilder&) = delete;
-  BlockBuilder& operator=(const BlockBuilder&) = delete;
+  virtual ~BlockBuilder() = default;
 
   // Reset the contents as if the BlockBuilder was just constructed.
   //重置内容，就像刚刚构建了BlockBuilder一样。
-  void Reset();
+  virtual void Reset() = 0;
 
   // REQUIRES: Finish() has not been called since the last call to Reset().
   // REQUIRES: key is larger than any previously added key
-  void Add(const Slice& key, const Slice& value);
+  virtual void Add(const Slice& key, const Slice& value) = 0;
 
   // Finish building the block and return a slice that refers to the
   // block contents.  The returned slice will remain valid for the
   // lifetime of this builder or until Reset() is called.
-  Slice Finish();
+  virtual Slice Finish() = 0;
 
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
-  size_t CurrentSizeEstimate() const;
+  virtual size_t CurrentSizeEstimate() const = 0;
 
   // Return true iff no entries have been added since the last Reset()
-  bool empty() const { return buffer_.empty(); }
+  virtual bool empty() const = 0;
+
+  virtual std::string LargestKey() const = 0;
+  
+  virtual std::string SmallestKey() const = 0;
+};
+
+class PrefixBlockBuilder : public BlockBuilder {
+ public:
+  explicit PrefixBlockBuilder(const Options* options);
+
+  PrefixBlockBuilder(const PrefixBlockBuilder&) = delete;
+  PrefixBlockBuilder& operator=(const PrefixBlockBuilder&) = delete;
+
+  void Reset() override;
+  void Add(const Slice& key, const Slice& value) override;
+  Slice Finish() override;
+  size_t CurrentSizeEstimate() const override;
+  bool empty() const override { return buffer_.empty(); }
+
+  std::string LargestKey() const override{
+    return "";
+  }
+
+  std::string SmallestKey() const override{
+    return "";
+  }
 
  private:
   const Options* options_;
@@ -49,7 +72,44 @@ class BlockBuilder {
   int counter_;                     // Number of entries emitted since restart
   bool finished_;                   // Has Finish() been called?
   std::string last_key_;
+  std::string largest_key_;
+  std::string smallest_key_;
 };
+
+class FlatBlockBuilder : public BlockBuilder {
+ public:
+  explicit FlatBlockBuilder(const Options* options);
+
+  FlatBlockBuilder(const FlatBlockBuilder&) = delete;
+  FlatBlockBuilder& operator=(const FlatBlockBuilder&) = delete;
+
+  void Reset() override;
+  void Add(const Slice& key, const Slice& value) override;
+  Slice Finish() override;
+  size_t CurrentSizeEstimate() const override;
+  bool empty() const override { return buffer_.empty(); }
+
+  std::string LargestKey() const override{
+    assert(largest_key_.size() > 0);
+    return largest_key_;
+  }
+
+  std::string SmallestKey() const override{
+    assert(smallest_key_.size() > 0);
+    return smallest_key_;
+  }
+
+ private:
+  const Options* options_;
+  std::string buffer_;              // Destination buffer
+  int counter_ = 0;                     // Number of entries emitted since restart
+  bool finished_;                   // Has Finish() been called?
+  size_t key_size_ = 0;
+  size_t value_size_ = 0;
+  std::string largest_key_;
+  std::string smallest_key_;
+};
+
 
 }  // namespace leveldb
 

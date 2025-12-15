@@ -19,6 +19,7 @@
 #include "leveldb/export.h"
 #include "leveldb/options.h"
 #include "leveldb/status.h"
+#include "sindex/greedy_plr.h"
 
 namespace leveldb {
 
@@ -31,7 +32,7 @@ class LEVELDB_EXPORT TableBuilder {
   // Create a builder that will store the contents of the table it is
   // building in *file.  Does not close the file.  It is up to the
   // caller to close the file after calling Finish().
-  TableBuilder(const Options& options, WritableFile* file);
+  TableBuilder(const Options& options, WritableFile* file, const bool is_model);
 
   TableBuilder(const TableBuilder&) = delete;
   TableBuilder& operator=(const TableBuilder&) = delete;
@@ -81,13 +82,31 @@ class LEVELDB_EXPORT TableBuilder {
   // Finish() call, returns the size of the final generated file.
   uint64_t FileSize() const;
 
+  void PushPendingKeys(std::string&& key, uint32_t value){
+      //pending_keys_.emplace_back(std::move(key), value);
+      models_algorithm_.PushToData(key,value);
+  }
+
+  // std::vector<std::pair<std::string, uint32_t>>& GetPendingKeys(){
+  //   //return pending_keys_;
+  //   return models_algorithm_.data;
+  // }
+
  private:
   bool ok() const { return status().ok(); }
   void WriteBlock(BlockBuilder* block, BlockHandle* handle);
   void WriteRawBlock(const Slice& data, CompressionType, BlockHandle* handle);
+  void AddToModelInfo();
+  //std::vector<std::pair<std::string, uint32_t>> pending_keys_;
 
   struct Rep;
   Rep* rep_;
+
+  sindex::PLRResult models_result_;
+  sindex::GreedyPLR models_algorithm_;
+
+  uint32_t entry_count_ = 0;
+
 };
 
 }  // namespace leveldb

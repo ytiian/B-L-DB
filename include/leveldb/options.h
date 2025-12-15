@@ -104,6 +104,12 @@ struct LEVELDB_EXPORT Options {
   // leave this parameter alone.
   int block_restart_interval = 16;
 
+
+  int block_contain_keys = 16;
+
+
+  int error_bound = 20;
+
   // Leveldb will write up to this amount of bytes to a file before
   // switching to a new one.
   // Most clients should leave this parameter alone.  However if your

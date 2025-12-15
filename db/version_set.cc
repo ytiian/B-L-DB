@@ -291,7 +291,7 @@ class Version::LevelFileNumIterator : public Iterator {
 //建立file（table）上的迭代器，
 //（其实具体是构造在table的index block上）
 static Iterator* GetFileIterator(void* arg, const ReadOptions& options,
-                                 const Slice& file_value) {
+                                 const Slice& file_value, const bool& is_model) {
   TableCache* cache = reinterpret_cast<TableCache*>(arg);
   if (file_value.size() != 16) {
     return NewErrorIterator(
@@ -311,7 +311,7 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
     //第一级：file list 每个条目是一个meta
     //第二级：对每个meta对应的文件，指向一个index block，每个条目是一个data block句柄
       new LevelFileNumIterator(vset_->icmp_, flist), &GetFileIterator,
-      vset_->table_cache_, options);
+      vset_->table_cache_, options, false);
 }
 
 //构建一个整体的迭代器组
@@ -447,20 +447,20 @@ Status Version::RebuildSIndex(SIndexWrapper* sindex){
 
 
 void Version::PrintLiveTime(){
-  for(int i = config::kNumLevels - 1; i >= 0; i--){
-    for(int j = 0; j < runs_[i].size(); j++){
-      const SortedRun* run = runs_[i][j];
+  // for(int i = config::kNumLevels - 1; i >= 0; i--){
+  //   for(int j = 0; j < runs_[i].size(); j++){
+  //     const SortedRun* run = runs_[i][j];
 
-      uint64_t now_micros =
-          std::chrono::duration_cast<std::chrono::microseconds>(
-              std::chrono::system_clock::now().time_since_epoch()
-          ).count();
+  //     uint64_t now_micros =
+  //         std::chrono::duration_cast<std::chrono::microseconds>(
+  //             std::chrono::system_clock::now().time_since_epoch()
+  //         ).count();
 
-      double live_ms = (now_micros - run->create_time_micros) / 1000.0;
+  //     double live_ms = (now_micros - run->create_time_micros) / 1000.0;
 
-      std::cout<<"Compaction delete run "<<run->GetID()<<" in level " <<run->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<run->GetFileNum() << std::endl;      
-    }
-  }  
+  //     std::cout<<"Compaction delete run "<<run->GetID()<<" in level " <<run->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<run->GetFileNum() << std::endl;      
+  //   }
+  // }  
 }
 
 //对每个包含use key的文件调用func函数
@@ -1653,7 +1653,7 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       const std::vector<FileMetaData*>* contain_files = runs[i]->GetContainFile();
       list[num++] = NewTwoLevelIterator(
           new Version::LevelFileNumIterator(icmp_, contain_files),
-          &GetFileIterator, table_cache_, options);      
+          &GetFileIterator, table_cache_, options, false);      
     }
   }
 
@@ -1943,17 +1943,17 @@ Compaction::~Compaction() {
 
 //所有参与compaction的Run都要加入待删除
 void Compaction::AddRunDeletions(VersionEdit* edit){
-  std::cout<<"delete number:"<<inputs_runs_.size()<<std::endl;
+  //std::cout<<"delete number:"<<inputs_runs_.size()<<std::endl;
   for(size_t i = 0; i < inputs_runs_.size(); i++){
     edit->RemoveRun(inputs_runs_[i]);
-    uint64_t now_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count();
+    // uint64_t now_micros =
+    //     std::chrono::duration_cast<std::chrono::microseconds>(
+    //         std::chrono::system_clock::now().time_since_epoch()
+    //     ).count();
 
-    double live_ms = (now_micros - inputs_runs_[i]->create_time_micros) / 1000.0;
+    // double live_ms = (now_micros - inputs_runs_[i]->create_time_micros) / 1000.0;
 
-    std::cout<<"Compaction delete run "<<inputs_runs_[i]->GetID()<<" in level " <<inputs_runs_[i]->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<inputs_runs_[i]->GetFileNum() << std::endl; 
+    // std::cout<<"Compaction delete run "<<inputs_runs_[i]->GetID()<<" in level " <<inputs_runs_[i]->GetLevel()<< " live :"<< live_ms << " ms, has file number:" <<inputs_runs_[i]->GetFileNum() << std::endl; 
   }
 }
 //当key的type是delete的时候

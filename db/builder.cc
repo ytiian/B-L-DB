@@ -33,7 +33,7 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
       return s;
     }
 
-    TableBuilder* builder = new TableBuilder(options, file);
+    TableBuilder* builder = new TableBuilder(options, file, false);
     meta->smallest.DecodeFrom(iter->key());
     Slice key;
 
