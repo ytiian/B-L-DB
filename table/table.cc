@@ -277,16 +277,26 @@ static void ReleaseBlock(void* arg, void* h) {
 // into an iterator over the contents of the corresponding block.
 //传入index block的一个条目，构造一个对应data block的迭代器
 Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
-                             const Slice& index_value, const bool& is_model) {
+                             const Slice& index_value, const bool& is_model,
+                            const bool& from_data_info) {
   Table* table = reinterpret_cast<Table*>(arg);
   Cache* block_cache = table->rep_->options.block_cache;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;
 
   BlockHandle handle;
+  IndexHandle index_handle;
   //index_value就是handle的平铺值
-  Slice input = index_value;
-  Status s = handle.DecodeFrom(&input);
+  Status s;
+  if(from_data_info){
+    Slice input = index_value;
+    s = index_handle.DecodeFrom(&input);
+    index_handle.ToBlockHandle(handle);
+  }else{
+    Slice input = index_value;
+    s = handle.DecodeFrom(&input);
+  }
+
   // We intentionally allow extra stuff in index_value so that we
   // can add more features in the future.
 
@@ -308,6 +318,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
       } else {
         //不存在则还是从file中读
         s = ReadBlock(table->rep_->file, options, handle, &contents);
+        assert(s.ok());
         if (s.ok()) {
           if(is_model){
             block = new FlatBlock(contents);
@@ -354,7 +365,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
 Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator, false),//构造index_block上的迭代器
-      &Table::BlockReader, const_cast<Table*>(this), options, rep_->is_model);//BlockReader函数，index value->data block iter
+      &Table::BlockReader, const_cast<Table*>(this), options, rep_->is_model, false);//BlockReader函数，index value->data block iter
       //this 把这个对象传给NewTwoLevelIterator函数（在这个table对象上构造的）
 }
 
@@ -362,17 +373,20 @@ Status Table::GetByModel(const ReadOptions& options, const Slice& k, void* arg,
                           void (*handle_result)(void*, const Slice&,
                                                 const Slice&)){
   Status s;
-  Iterator* miter = rep_->model_info_block->NewIterator(rep_->options.comparator, false);
+  Iterator* miter = rep_->model_info_block->NewIterator(BytewiseComparator(), false);
   //定位条目
   std::string target = Slice(k.data(), k.size()-8).ToString();     
   PutFixed32(&target, 1);  // start index
-  PutFixed32(&target, 0);  // end index                             
+  PutFixed32(&target, 0);  // end index     
+  //std::cout<<"seek model key:"<<target<<std::endl;                        
   miter->Seek(target);
   if(miter->Valid()){
     Slice handle_value = miter->value();
     ModelParam param;
+    //std::cout<<"target key:"<<Slice(k.data(), k.size()-8).ToString()<<" model start key:"<<miter->key().ToString()<<std::endl;
     if (param.DecodeFrom(&handle_value).ok()) {
-      std::pair<size_t, size_t> range = sindex::GreedyPLR::GetSearchRange(k.ToString(), rep_->common_prefix_len_, param.slope(), param.intercept(), rep_->error_bound_);
+      std::pair<size_t, size_t> range = sindex::GreedyPLR::GetSearchRange(Slice(k.data(), k.size()-8).ToString(), rep_->common_prefix_len_, param.slope(), param.intercept(), rep_->error_bound_);
+      //std::cout<<"model predicted range: ["<<range.first<<","<<range.second<<"]"<<std::endl;
       size_t start_index = range.first;
       size_t end_index = range.second;
 
@@ -385,17 +399,29 @@ Status Table::GetByModel(const ReadOptions& options, const Slice& k, void* arg,
       PutFixed32(&index_key, end_data_block);
       iiter->Seek(index_key);
 
+      //std::cout<<"data info block key:"<<iiter->key().ToString()<<" "<<k.ToString()<<std::endl;
+
       if(iiter->Valid()){
         //[todo]r->data_info_block->Add(r->data_block->SmallestKey(), r->); 
         Slice handle_value = iiter->value();
         IndexHandle handle;
         if(handle.DecodeFrom(&handle_value).ok()){
-          Iterator* block_iter = BlockReader(this, options, iiter->value(), true);
+          uint32_t block_index = handle.index();
+
+          Iterator* block_iter = BlockReader(this, options, iiter->value(), true, true);
           //在block层面上的对key的查找
           std::string target = k.ToString();
-          PutFixed32(&target, start_index % rep_->options.block_contain_keys + rep_->options.block_contain_keys * handle.index());  // start index
-          PutFixed32(&target, end_index % rep_->options.block_contain_keys + rep_->options.block_contain_keys * handle.index());
-          block_iter->Seek(index_key);
+
+          int left_bound = start_index - block_index *  rep_->options.block_contain_keys;
+          int right_bound = end_index - block_index *  rep_->options.block_contain_keys;
+
+          PutFixed32(&target, left_bound < 0 ? 0 : left_bound);  // start index
+          PutFixed32(&target, right_bound > rep_->options.block_contain_keys -1 ? rep_->options.block_contain_keys -1 : right_bound);  // end index
+          
+          // std::cout<<"data block bound:"<<left_bound + block_index *  rep_->options.block_contain_keys
+          // <<" "<<right_bound + block_index *  rep_->options.block_contain_keys<<std::endl;
+
+          block_iter->Seek(target);
           if (block_iter->Valid()) {
             //？对找到的kv对的某种处理？
             (*handle_result)(arg, block_iter->key(), block_iter->value());
@@ -440,7 +466,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
       // Not found
     } else {//可能存在key
       //构造这个data block上的迭代器
-      Iterator* block_iter = BlockReader(this, options, iiter->value(), false);
+      Iterator* block_iter = BlockReader(this, options, iiter->value(), false, false);
       //在block层面上的对key的查找
       block_iter->Seek(k);
       if (block_iter->Valid()) {

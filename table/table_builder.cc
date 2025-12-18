@@ -46,6 +46,7 @@ struct TableBuilder::Rep {
         pending_index_entry(false) {
     index_block_options.block_restart_interval = 1;
     cur_block_count = 0;
+    entry_limits = 0;
   }
 
   ~Rep() {
@@ -69,8 +70,10 @@ struct TableBuilder::Rep {
   BlockBuilder* data_info_block;
   BlockBuilder* model_info_block;
   uint32_t cur_block_count;
+  uint32_t entry_limits;
   const bool is_model;
   std::string smallest_key;
+  std::string largest_key;
 
   // We do not emit the index entry for a block until we have seen the
   // first key for the next data block.  This allows us to use shorter
@@ -139,12 +142,17 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {//插入kv对
     if(r->is_model){
       std::string handle_encoding_data_info;
       r->pending_data_info_handle.EncodeTo(&handle_encoding_data_info);
-      r->data_info_block->Add(r->smallest_key, Slice(handle_encoding_data_info));
+    // std::cout<<"pending_data_info_handle:"<<" offset="<<r->pending_data_info_handle.offset()
+    //         <<", size="<<r->pending_data_info_handle.size()
+    //         <<", index="<<r->pending_data_info_handle.index()<<std::endl;
+    //std::cout<<"largest key:"<<r->largest_key<<std::endl;
+      r->data_info_block->Add(r->largest_key, Slice(handle_encoding_data_info));
     }
     //data block的handle是写入index block
     //格式：某个data block的最后一个key，handle
     //index block的内容也是kv对的形式
     r->index_block->Add(r->last_key, Slice(handle_encoding));
+    //std::cout<<"add to index_block "<<Slice(handle_encoding).size()<<std::endl;
     r->pending_index_entry = false;//对上一个块的处理已经完成
   }
 
@@ -160,12 +168,16 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {//插入kv对
   r->last_key.assign(key.data(), key.size());//重置last_key为当前key
   r->num_entries++;
   r->data_block->Add(key, value);//插入data_block
+  r->entry_limits++;
 
   //预估当前block的大小
   const size_t estimated_block_size = r->data_block->CurrentSizeEstimate();
   //如果超出了配置的大小，换新块
-  if (estimated_block_size >= r->options.block_size) {
+  if (!r->is_model && estimated_block_size >= r->options.block_size) {
     Flush();
+  }else if(r->is_model && r->entry_limits >= r->options.block_contain_keys){
+    Flush();
+    r->entry_limits = 0;
   }
 }
 
@@ -181,8 +193,12 @@ void TableBuilder::Flush() {
   if (r->data_block->empty()) return;
   assert(!r->pending_index_entry);
   WriteBlock(r->data_block, &r->pending_handle);//对旧块收尾
-  r->pending_data_info_handle.SetFromBlockHandle(r->pending_handle, 
-                                              r->cur_block_count++);
+  // std::cout<<"pending_handle:"<<" offset="<<r->pending_handle.offset()
+  //          <<", size="<<r->pending_handle.size()<<std::endl;
+  if(r->is_model){
+    r->pending_data_info_handle.SetFromBlockHandle(r->pending_handle, 
+                                                r->cur_block_count++);
+  }
   if (ok()) {
     r->pending_index_entry = true;//意味着即将写新块
     r->status = r->file->Flush();
@@ -228,7 +244,8 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   //handle是这个块的信息
   WriteRawBlock(block_contents, type, handle);
   r->compressed_output.clear();
-  r->smallest_key = block->SmallestKey();
+  //r->smallest_key = block->SmallestKey();
+  r->largest_key = block->LargestKey();
   block->Reset();//清空块，意味着一个新块
 }
 
@@ -259,10 +276,13 @@ void TableBuilder::AddToModelInfo(){
   for (const auto& seg : models_result_.segments) {
       // Value: slope (8 bytes) + intercept (8 bytes)
       char value_buf[16];
+      //std::cout<<"model segment start key: "<<seg.start_key
+      //         <<", slope: "<<seg.slope
+      //         <<", intercept: "<<seg.intercept<<std::endl;
       EncodeFixed64(value_buf, *reinterpret_cast<const uint64_t*>(&seg.slope));
       EncodeFixed64(value_buf + 8, *reinterpret_cast<const uint64_t*>(&seg.intercept));
 
-      rep_->model_info_block->Add(Slice(seg.start_key), Slice(value_buf, 16));
+      rep_->model_info_block->Add(Slice(seg.end_key), Slice(value_buf, 16));
   }
 }
 
@@ -296,11 +316,15 @@ Status TableBuilder::Finish() {
       std::string handle_encoding;
       r->pending_handle.EncodeTo(&handle_encoding);
       r->index_block->Add(r->last_key, Slice(handle_encoding));
+      //std::cout<<"add to index_block "<<Slice(handle_encoding).size()<<std::endl;
       r->pending_index_entry = false;
       if(r->is_model){
         std::string handle_encoding_data_info;
         r->pending_data_info_handle.EncodeTo(&handle_encoding_data_info);
-        r->data_info_block->Add(r->smallest_key, Slice(handle_encoding_data_info));
+    // std::cout<<"pending_data_info_handle:"<<" offset="<<r->pending_data_info_handle.offset()
+    //         <<", size="<<r->pending_data_info_handle.size()
+    //         <<", index="<<r->pending_data_info_handle.index()<<std::endl;
+        r->data_info_block->Add(r->largest_key, Slice(handle_encoding_data_info));
       }
     }
     //index_block写文件

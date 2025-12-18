@@ -78,6 +78,7 @@ void FlatBlockBuilder::Add(const Slice& key, const Slice& value) {
   key_size_ = key.size();
   value_size_ = value.size();
 
+  assert(key_size_ > 0);
   // Add string delta to buffer_ followed by value
   buffer_.append(key.data(), key.size());//只要保存不相同的部分就可以
   buffer_.append(value.data(), value.size());

@@ -55,8 +55,6 @@ class FlatBlock::Iter : public Iterator {
   uint32_t current_num_;
   uint32_t num_cnt_;
 
-  std::string key_;//所指向的key
-  Slice value_;//所指向的value
   Status status_;
 
   size_t key_size_;//key的固定长度
@@ -68,18 +66,21 @@ class FlatBlock::Iter : public Iterator {
 
   // Return the offset in data_ just past the end of the current entry.
   //返回下一条条目的偏移，（当前value的结尾）
-  inline uint32_t NextEntryOffset() const {
-    return (value_.data() + value_.size()) - data_;
-  }
+  // inline uint32_t NextEntryOffset() const {
+  //   return (value_.data() + value_.size()) - data_;
+  // }
 
  public:
  //data：BlockContents的具体内容，restarts是restart array开始的地方
-  Iter(const Comparator* comparator, const char* data, uint32_t num_cnt, const bool is_data_block)
+  Iter(const Comparator* comparator, const char* data, uint32_t num_cnt, const bool is_data_block,
+       size_t key_size, size_t value_size)
       : comparator_(comparator),
         data_(data),
         is_data_block_(is_data_block),
         num_cnt_(num_cnt),
-        current_num_(0) {//初始化为最大值的restart编号
+        current_num_(0),
+        key_size_(key_size),
+        value_size_(value_size) {//初始化为最大值的restart编号
   }
 
   void NextIndex() override {
@@ -102,7 +103,7 @@ class FlatBlock::Iter : public Iterator {
   }
 
 //如果条目在restart数组之前 说明是有效的
-  bool Valid() const override { return current_num_ < num_cnt_; }
+  bool Valid() const override { return current_num_ < num_cnt_ && current_num_ >= 0; }
   Status status() const override { return status_; }
   Slice key() const override {
     assert(Valid());
@@ -116,33 +117,51 @@ class FlatBlock::Iter : public Iterator {
 //迭代器向前移一个条目  后->前
   void Next() override {
     assert(Valid());
-    ParseNextKey();
+    current_num_++;
   }
 
 //向后移一个条目  后->前
   void Prev() override {
+    assert(Valid());
+    current_num_--;
   }
 
-  void Seek(const Slice& target) override {
-    Slice key = Slice(target.data(), target.size()-8);
-    uint32_t left_bound = DecodeFixed32(target.data() + key_size_);
-    uint32_t right_bound = DecodeFixed32(target.data() + key_size_ + 4);
-    
-    if(right_bound< left_bound){
+  void Seek(const Slice& target) override { 
+    //std::cout<<"FlatBlock::Iter::Seek target:"<<target.ToString()<<std::endl;
+    Slice key;
+
+    key = Slice(target.data(), target.size()-8);
+
+
+    uint32_t left_bound = DecodeFixed32(target.data() + target.size()-8);
+    uint32_t right_bound = DecodeFixed32(target.data() + target.size()-4);   
+
+    right_bound > num_cnt_-1 ? right_bound = num_cnt_-1 : right_bound = right_bound;
+
+    if(right_bound < left_bound){
       left_bound = 0;
       right_bound = num_cnt_-1;
     }
+    
+    //std::cout<<"seek target key:"<<key.ToString()<<" left_bound:"<<left_bound<<" right_bound:"<<right_bound<<std::endl;
+
+    // uint32_t left = left_bound;
+    // uint32_t right = right_bound;   // 半开区间 [left, right)
 
     uint32_t left = left_bound;
-    uint32_t right = right_bound;
-    
-    Slice mid_key;
-    
+    uint32_t right = right_bound + 1;   // 注意：右边界改成「开区间」
+
+    // for(int i = left; i <= right+1; i++){
+    //   Slice cur_key(data_ + i * (key_size_ + value_size_), key_size_);
+    //   std::cout<<"  current key:"<<cur_key.ToString()<<std::endl;
+    // }
+
     while (left < right) {
       uint32_t mid = left + ((right - left) >> 1);
       const char* entry_ptr = data_ + mid * (key_size_ + value_size_);
       Slice mid_key(entry_ptr, key_size_);
 
+      // 找第一个 >= key
       if (Compare(mid_key, key) < 0) {
         left = mid + 1;
       } else {
@@ -150,30 +169,31 @@ class FlatBlock::Iter : public Iterator {
       }
     }
 
-    // left == right，此时 left 就是第一个 >= key 的位置
     current_num_ = left;
+
+    //std::cout << "after seek current_num_: " << current_num_ << std::endl;
   }
 
 //定位到第一个条目
   void SeekToFirst() override {
-    key_ = Slice(data_, key_size_).ToString();
-    value_ = Slice(data_ + key_size_, value_size_);
+    current_num_ = 0;
+    //std::cout<<"FlatBlock::Iter::SeekToFirst"<<" key:"<<key().ToString()<<std::endl;
   }
 
 //定位到最后一个条目
   void SeekToLast() override {
+    current_num_ = num_cnt_ - 1;
   }
 
  private:
   void CorruptionError() {
     status_ = Status::Corruption("bad entry in block");
-    key_.clear();
-    value_.clear();
   }
 
-  bool ParseNextKey() {
-    current_num_ ++;
-  }
+  // bool ParseNextKey() {
+  //   current_num_ ++;
+  //   return true;
+  // }
 };
 
 //在块上新建一个迭代器(属于Block类的方法)
@@ -182,7 +202,7 @@ Iterator* FlatBlock::NewIterator(const Comparator* comparator, const bool is_dat
     return NewErrorIterator(Status::Corruption("bad block contents"));
   }
 
-  return new Iter(comparator, data_, num_cnt_, is_data_block);
+  return new Iter(comparator, data_, num_cnt_, is_data_block, key_size_, value_size_);
 }
 
 }  // namespace leveldb

@@ -88,8 +88,11 @@ class IteratorWrapper {
   }
 
   void ResetDataBlock(){
+    //std::cout<<"IteratorWrapper::ResetDataBlock called begin"<<std::endl;
     assert(iter_);
     iter_->ResetDataBlock();
+    //std::cout<<"IteratorWrapper::ResetDataBlock called end"<<std::endl;
+    Update();
   }
 
   Slice indexKey() const {

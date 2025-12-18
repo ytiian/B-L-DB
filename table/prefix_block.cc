@@ -283,6 +283,7 @@ class PrefixBlock::Iter : public Iterator {
   void SeekToFirst() override {
     SeekToRestartPoint(0);
     ParseNextKey();
+    //std::cout<<"prefix block SeekToFirst"<<" value size:"<<value_.size()<<std::endl;
   }
 
 //定位到最后一个条目

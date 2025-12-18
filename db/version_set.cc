@@ -291,7 +291,7 @@ class Version::LevelFileNumIterator : public Iterator {
 //建立file（table）上的迭代器，
 //（其实具体是构造在table的index block上）
 static Iterator* GetFileIterator(void* arg, const ReadOptions& options,
-                                 const Slice& file_value, const bool& is_model) {
+                                 const Slice& file_value, const bool& is_model, const bool& from_data_info) {
   TableCache* cache = reinterpret_cast<TableCache*>(arg);
   if (file_value.size() != 16) {
     return NewErrorIterator(
@@ -311,7 +311,7 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
     //第一级：file list 每个条目是一个meta
     //第二级：对每个meta对应的文件，指向一个index block，每个条目是一个data block句柄
       new LevelFileNumIterator(vset_->icmp_, flist), &GetFileIterator,
-      vset_->table_cache_, options, false);
+      vset_->table_cache_, options, false, false);
 }
 
 //构建一个整体的迭代器组
@@ -326,7 +326,7 @@ void Version::AddIterators(const ReadOptions& options,
       std::vector<FileMetaData*>* files = runs_[i][j]->GetContainFile();
       std::vector<uint64_t>* L0 = runs_[i][j]->GetRunToL0();
       for(int k = 0; k < L0->size(); k++){
-        //std::cout<<L0->at(k)<<" "<<index<<std::endl;
+        //std::cout<<"insert index_map:"<<L0->at(k)<<" "<<index<<std::endl;
         index_map->insert(std::make_pair(L0->at(k), index));
       }
       if(i == 0){
@@ -1648,12 +1648,17 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       list[num++] = table_cache_->NewIterator(options, files[i]->number, files[i]->file_size);
     }
   }else{
+    //std::cout<<"MakeInputIterator for level "<<c->level()<<", num runs: "<<c->inputs_runs_.size()<<std::endl;
     const std::vector<SortedRun*>& runs = c->inputs_runs_;
     for(size_t i = 0; i < runs.size(); i++){
       const std::vector<FileMetaData*>* contain_files = runs[i]->GetContainFile();
+      //auto l0 = runs[i]->GetRunToL0();
+      // for(const auto& f : *l0){
+      //   std::cout<<"  input l0: "<<f<<std::endl;
+      // }
       list[num++] = NewTwoLevelIterator(
           new Version::LevelFileNumIterator(icmp_, contain_files),
-          &GetFileIterator, table_cache_, options, false);      
+          &GetFileIterator, table_cache_, options, false, false);      
     }
   }
 

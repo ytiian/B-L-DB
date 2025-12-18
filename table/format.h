@@ -45,6 +45,8 @@ class IndexHandle {
 
   void SetFromBlockHandle(const BlockHandle& bh, uint32_t index);
 
+  void ToBlockHandle(BlockHandle& bh) const;
+
  private:
   uint64_t offset_;//偏移量
   uint64_t size_;//大小
@@ -56,8 +58,8 @@ class ModelParam{
     ModelParam():slope_(0.0),intercept_(0.0){}
     ModelParam(double slope, double intercept):slope_(slope),intercept_(intercept){}
 
-    uint64_t slope() const { return slope_; }
-    uint64_t intercept() const { return intercept_; }
+    double slope() const { return slope_; }
+    double intercept() const { return intercept_; }
 
     void EncodeTo(std::string* dst) const;
     Status DecodeFrom(Slice* input);    

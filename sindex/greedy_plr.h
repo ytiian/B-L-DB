@@ -13,7 +13,7 @@
 namespace sindex {
 
 struct Segment {
-    std::string start_key;
+    std::string end_key;
     double slope;
     double intercept;
 };
@@ -32,19 +32,12 @@ class GreedyPLR {
 
     // Helper to convert string to double (using first 8 bytes after offset)
     // This preserves the order for strings that differ in the first 8 bytes.
-    static double str_to_double(const std::string& key, size_t offset) {
-        uint64_t val = 0;
-        size_t available = (key.size() > offset) ? (key.size() - offset) : 0;
-        size_t copy_len = std::min(available, sizeof(uint64_t));
-        for (size_t i = 0; i < copy_len; ++i) {
-            val = (val << 8) | (unsigned char)key[offset + i];
+    static double str_to_double(const std::string& key) {
+        double val = 0.0;
+        for (char c : key) {
+            val = val * 10.0 + (c - '0');
         }
-        if (copy_len < 8) {
-            val = val << (8 * (8 - copy_len));
-        }
-        // Use a scale factor to avoid huge doubles if needed, but standard double has 53 bits significand.
-        // uint64_t has 64 bits. Precision loss is possible but usually acceptable for PLR indexing.
-        return static_cast<double>(val);
+        return val;
     }
 
 public:
@@ -68,7 +61,8 @@ public:
         // std::vector<Point> points;
         // points.reserve(data.size());
         // for (const auto& p : data) {
-        //     points.push_back({str_to_double(p.first, common_prefix_len), static_cast<double>(p.second)});
+        //     points.push_back({str_to_double(p.first), static_cast<double>(p.second)});
+        //     std::cout<<"data key:"<<p.first<<" value:"<<p.second<<std::endl;
         // }
 
         size_t n = points.size();
@@ -79,41 +73,29 @@ public:
             
             // Save the segment
             // Note: The segment is valid for [start, next_start - 1]
-            segments.push_back({data[start].first, slope, intercept});
+            segments.push_back({data[next_start - 1].first, slope, intercept});
             
             start = next_start;
         }
         
-        std::cout<<segments.size()<<" segments created with common prefix length "<<common_prefix_len<<std::endl;
+        //std::cout<<segments.size()<<" segments created with common prefix length "<<common_prefix_len<<std::endl;
 
         return {error_bound, segments, common_prefix_len};
     }
 
     static std::pair<size_t, size_t> GetSearchRange(const std::string& key, size_t common_prefix_len, double slope, double intercept, uint32_t error_bound) {
-        double x = str_to_double(key, common_prefix_len);
+        double x = str_to_double(key);
         double y = slope * x + intercept;
         long long min_pos = static_cast<long long>(y) - error_bound;
         long long max_pos = static_cast<long long>(y) + error_bound;
         if (min_pos < 0) min_pos = 0;
+        //std::cout<<"Search range for key "<<key<<" x:"<<x<<": ["<<min_pos<<", "<<max_pos<<"]"<<std::endl;
         return {static_cast<size_t>(min_pos), static_cast<size_t>(max_pos)};
     }
 
     void PushToData(const std::string& key, const uint32_t value) {
         data.emplace_back(std::move(key), value);
-        points.push_back({str_to_double(key, prefix_len_), static_cast<double>(value)});
-        if (first_) {
-            base_key_ = key;
-            prefix_len_ = key.size();
-            first_ = false;
-            return;
-        }
-
-        size_t n = std::min(prefix_len_, key.size());
-        size_t i = 0;
-        for (; i < n; ++i) {
-            if (key[i] != base_key_[i]) break;
-        }
-        prefix_len_ = i; // shrink only
+        points.push_back({str_to_double(key), static_cast<double>(value)});
     }
 
 private:

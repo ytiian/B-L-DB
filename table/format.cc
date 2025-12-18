@@ -54,18 +54,20 @@ void IndexHandle::EncodeTo(std::string* dst) const {
   assert(offset_ != ~static_cast<uint64_t>(0));
   assert(size_ != ~static_cast<uint64_t>(0));
   assert(index_ != ~static_cast<uint32_t>(0));
-  PutVarint64(dst, offset_);
-  PutVarint64(dst, size_);
-  PutVarint32(dst, index_);
+  PutFixed64(dst, offset_);
+  PutFixed64(dst, size_);
+  PutFixed64(dst, index_);
 }
 
 //读handle（从input读）
 Status IndexHandle::DecodeFrom(Slice* input) {
-  if (GetVarint64(input, &offset_) && GetVarint64(input, &size_) && GetVarint32(input, &index_)) {
-    return Status::OK();
-  } else {
-    return Status::Corruption("bad block handle");
+  if (input->size() < sizeof(uint64_t)*2 + sizeof(uint32_t)) {
+    return Status::Corruption("bad index handle");
   }
+  offset_ = DecodeFixed64(input->data());
+  size_ = DecodeFixed64(input->data() + sizeof(uint64_t));
+  index_ = DecodeFixed64(input->data() + sizeof(uint64_t)*2);
+  return Status::OK();
 }
 
 void IndexHandle::SetFromBlockHandle(const BlockHandle& bh, uint32_t index) {
@@ -74,6 +76,11 @@ void IndexHandle::SetFromBlockHandle(const BlockHandle& bh, uint32_t index) {
   index_ = index;
 }
 
+
+void IndexHandle::ToBlockHandle(BlockHandle& bh) const {
+  bh.set_offset(offset_);
+  bh.set_size(size_);
+}
 
 //写footer（写入dst）
 void Footer::EncodeTo(std::string* dst) const {
