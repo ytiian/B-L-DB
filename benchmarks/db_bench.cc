@@ -89,6 +89,11 @@ static bool FLAGS_comparisons = false;
 // (initialized to default value by "main")
 static int FLAGS_write_buffer_size = 0;
 
+static int FLAGS_block_contain_keys = 0;
+
+static int FLAGS_error_bound = 0;
+
+
 // Number of bytes written to each file.
 // (initialized to default value by "main")
 static int FLAGS_max_file_size = 0;
@@ -844,6 +849,8 @@ class Benchmark {
     options.create_if_missing = !FLAGS_use_existing_db;
     options.block_cache = cache_;
     options.write_buffer_size = FLAGS_write_buffer_size;
+    options.block_contain_keys = FLAGS_block_contain_keys;
+    options.error_bound = FLAGS_error_bound;
     options.max_file_size = FLAGS_max_file_size;
     options.block_size = FLAGS_block_size;
     if (FLAGS_comparisons) {
@@ -1178,6 +1185,8 @@ class Benchmark {
 
 int main(int argc, char** argv) {
   FLAGS_write_buffer_size = leveldb::Options().write_buffer_size;
+  FLAGS_block_contain_keys = leveldb::Options().block_contain_keys;
+  FLAGS_error_bound = leveldb::Options().error_bound;
   FLAGS_max_file_size = leveldb::Options().max_file_size;
   FLAGS_block_size = leveldb::Options().block_size;
   FLAGS_open_files = leveldb::Options().max_open_files;
@@ -1216,6 +1225,12 @@ int main(int argc, char** argv) {
       FLAGS_value_size = n;
     } else if (sscanf(argv[i], "--write_buffer_size=%d%c", &n, &junk) == 1) {
       FLAGS_write_buffer_size = n;
+    }else if (sscanf(argv[i], "--block_contain_keys=%d%c", &n, &junk) == 1) {
+      FLAGS_block_contain_keys = n;
+      std::cout<<"block_contain_keys:"<<FLAGS_block_contain_keys<<std::endl;
+    }else if (sscanf(argv[i], "--error_bound=%d%c", &n, &junk) == 1) {
+      FLAGS_error_bound = n;
+      std::cout<<"error_bound:"<<FLAGS_error_bound<<std::endl;
     } else if (sscanf(argv[i], "--max_file_size=%d%c", &n, &junk) == 1) {
       FLAGS_max_file_size = n;
     } else if (sscanf(argv[i], "--block_size=%d%c", &n, &junk) == 1) {

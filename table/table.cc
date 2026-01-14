@@ -108,9 +108,9 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
 }
 
 void Table::ReadMeta(const Footer& footer) {
-  if (rep_->options.filter_policy == nullptr) {
-    return;  // Do not need any metadata
-  }
+  // if (rep_->options.filter_policy == nullptr) {
+  //   return;  // Do not need any metadata
+  // }
 
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
   // it is an empty block.
@@ -131,13 +131,17 @@ void Table::ReadMeta(const Footer& footer) {
   //在meta block上构建迭代器
   Iterator* iter = meta->NewIterator(BytewiseComparator(), false);
   //构造filter block的名字
-  std::string key = "filter.";
-  key.append(rep_->options.filter_policy->Name());
-  //在metadata中找到filter block对应的条目的位置
-  iter->Seek(key);
-  //得到的是filter block对应的handle
-  if (iter->Valid() && iter->key() == Slice(key)) {
-    ReadFilter(iter->value());
+  std::string key;
+
+  if (rep_->options.filter_policy != nullptr) {
+    key = "filter.";
+    key.append(rep_->options.filter_policy->Name());
+    //在metadata中找到filter block对应的条目的位置
+    iter->Seek(key);
+    //得到的是filter block对应的handle
+    if (iter->Valid() && iter->key() == Slice(key)) {
+      ReadFilter(iter->value());
+    }
   }
 
   key = "data_info";
