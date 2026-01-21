@@ -72,6 +72,8 @@ static int FLAGS_reads = -1;
 // Number of concurrent threads to run.
 static int FLAGS_threads = 1;
 
+static int FLAGS_key_size = 16;
+
 // Size of each value
 static int FLAGS_value_size = 100;
 
@@ -221,7 +223,7 @@ class KeyBuffer {
                   sizeof(buffer_) - FLAGS_key_prefix, "%016d", k);
   }
 
-  Slice slice() const { return Slice(buffer_, FLAGS_key_prefix + 16); }
+  Slice slice() const { return Slice(buffer_, FLAGS_key_prefix + FLAGS_key_size); }
 
  private:
   char buffer_[1024];
@@ -394,6 +396,7 @@ class Benchmark {
   const FilterPolicy* filter_policy_;
   DB* db_;
   int num_;
+  int key_size_;
   int value_size_;
   int entries_per_batch_;
   WriteOptions write_options_;
@@ -403,7 +406,7 @@ class Benchmark {
   int total_thread_count_;
 
   void PrintHeader() {
-    const int kKeySize = 16 + FLAGS_key_prefix;
+    const int kKeySize = FLAGS_key_size + FLAGS_key_prefix;
     PrintEnvironment();
     std::fprintf(stdout, "Keys:       %d bytes each\n", kKeySize);
     std::fprintf(
@@ -488,6 +491,7 @@ class Benchmark {
                            : nullptr),
         db_(nullptr),
         num_(FLAGS_num),
+        key_size_(FLAGS_key_size),
         value_size_(FLAGS_value_size),
         entries_per_batch_(1),
         reads_(FLAGS_reads < 0 ? FLAGS_num : FLAGS_reads),
@@ -566,6 +570,7 @@ class Benchmark {
       num_ = FLAGS_num;
       reads_ = (FLAGS_reads < 0 ? FLAGS_num : FLAGS_reads);
       value_size_ = FLAGS_value_size;
+      key_size_ = FLAGS_key_size;
       entries_per_batch_ = 1;
       write_options_ = WriteOptions();
 
@@ -1221,6 +1226,8 @@ int main(int argc, char** argv) {
       FLAGS_reads = n;
     } else if (sscanf(argv[i], "--threads=%d%c", &n, &junk) == 1) {
       FLAGS_threads = n;
+    } else if(sscanf(argv[i], "--key_size=%d%c", &n, &junk) == 1){
+      FLAGS_key_size = n;
     } else if (sscanf(argv[i], "--value_size=%d%c", &n, &junk) == 1) {
       FLAGS_value_size = n;
     } else if (sscanf(argv[i], "--write_buffer_size=%d%c", &n, &junk) == 1) {

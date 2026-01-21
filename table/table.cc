@@ -18,8 +18,25 @@
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
 #include "db/dbformat.h"
+#include <atomic>
 
 namespace leveldb {
+
+std::atomic<uint64_t> internal_get_cnt{0};
+
+struct TableGetProfiler {
+  ~TableGetProfiler() {
+    uint64_t cnt   = internal_get_cnt.load();
+
+    fprintf(stderr,
+      "\n==== Table::InternalGet Profiling ====\n"
+      "Block IO            : %lu\n"
+      "=====================================\n",
+      cnt);
+  }
+};
+
+static TableGetProfiler table_get_profiler;
 
 struct Table::Rep {
   ~Rep() {
@@ -277,6 +294,92 @@ static void ReleaseBlock(void* arg, void* h) {
   cache->Release(handle);
 }
 
+Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
+                             const Slice& index_value, const bool& is_model,
+                            const bool& from_data_info, const bool& is_get) {
+  Table* table = reinterpret_cast<Table*>(arg);
+  Cache* block_cache = table->rep_->options.block_cache;
+  Block* block = nullptr;
+  Cache::Handle* cache_handle = nullptr;
+
+  BlockHandle handle;
+  IndexHandle index_handle;
+  //index_value就是handle的平铺值
+  Status s;
+  if(from_data_info){
+    Slice input = index_value;
+    s = index_handle.DecodeFrom(&input);
+    index_handle.ToBlockHandle(handle);
+  }else{
+    Slice input = index_value;
+    s = handle.DecodeFrom(&input);
+  }
+
+  // We intentionally allow extra stuff in index_value so that we
+  // can add more features in the future.
+
+  if (s.ok()) {
+    BlockContents contents;
+    //读block前先在block cache中查找是否保存该block
+    if (block_cache != nullptr) {
+      char cache_key_buffer[16];
+      //cache_key_buffer的内容：[cache_id][该block在文件中的偏移量]
+      //用于构造block在block cache中的key
+      EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
+      EncodeFixed64(cache_key_buffer + 8, handle.offset());
+      Slice key(cache_key_buffer, sizeof(cache_key_buffer));
+      //在cache中查找是否存在该block。返回的handle就是指向所map的值对象
+      cache_handle = block_cache->Lookup(key);
+      //存在
+      if (cache_handle != nullptr) { 
+        block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
+      } else {
+        //不存在则还是从file中读
+        internal_get_cnt.fetch_add(1, std::memory_order_relaxed);
+        s = ReadBlock(table->rep_->file, options, handle, &contents);
+        assert(s.ok());
+        if (s.ok()) {
+          if(is_model){
+            block = new FlatBlock(contents);
+          } else{
+            block = new PrefixBlock(contents);
+          }
+          //如果允许缓存，放入block cache
+          if (contents.cachable && options.fill_cache) {
+            cache_handle = block_cache->Insert(key, block, block->size(),
+                                               &DeleteCachedBlock);
+          }
+        }
+      }
+    } else {//不允许缓存，直接从file读
+      s = ReadBlock(table->rep_->file, options, handle, &contents);
+      if (s.ok()) {
+        if(is_model){
+          block = new FlatBlock(contents);
+        } else{
+          block = new PrefixBlock(contents);
+        }
+      }
+    }
+  }
+  //构造一个迭代器，（？用于释放block的空间？）
+  //cleanup函数在迭代器销毁时会逐个调用
+  Iterator* iter;
+  if (block != nullptr) {
+    //这里的NewIterator是Block类的方法，在函数内部会用Block对象内保存的信息构造迭代器
+    //..return new Iter(comparator, data_, restart_offset_, num_restarts);
+    iter = block->NewIterator(table->rep_->options.comparator, true);
+    if (cache_handle == nullptr) {
+      iter->RegisterCleanup(&DeleteBlock, block, nullptr);
+    } else {
+      iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
+    }
+  } else {
+    iter = NewErrorIterator(s);
+  }
+  return iter;
+}
+
 // Convert an index iterator value (i.e., an encoded BlockHandle)
 // into an iterator over the contents of the corresponding block.
 //传入index block的一个条目，构造一个对应data block的迭代器
@@ -412,7 +515,7 @@ Status Table::GetByModel(const ReadOptions& options, const Slice& k, void* arg,
         if(handle.DecodeFrom(&handle_value).ok()){
           uint32_t block_index = handle.index();
 
-          Iterator* block_iter = BlockReader(this, options, iiter->value(), true, true);
+          Iterator* block_iter = BlockReader(this, options, iiter->value(), true, true, true);
           //在block层面上的对key的查找
           std::string target = k.ToString();
 
@@ -470,7 +573,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
       // Not found
     } else {//可能存在key
       //构造这个data block上的迭代器
-      Iterator* block_iter = BlockReader(this, options, iiter->value(), false, false);
+      Iterator* block_iter = BlockReader(this, options, iiter->value(), false, false, true);
       //在block层面上的对key的查找
       block_iter->Seek(k);
       if (block_iter->Valid()) {
