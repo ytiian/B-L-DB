@@ -1334,9 +1334,36 @@ void Group<key_t, val_t, seq, max_model_n>::Iterator::SeekToFirst() {
     (!temp_buffer_source || !temp_buffer_source->has_next)){
     valid_ = false;
   }else{
-    Next();
     valid_ = true;
+    Next();
   }
+}
+
+
+template <class key_t, class val_t, bool seq, size_t max_model_n>
+void Group<key_t, val_t, seq, max_model_n>::Iterator::Seek(const key_t& begin) {
+  uint32_t base_i = group_->get_pos_from_array(begin); 
+  // set_parameters(data, array_size, base_i);
+  array_source = std::make_shared<ArrayDataSource>(group_->data, group_->array_size, base_i);
+  buffer_source = std::make_shared<typename buffer_t::DataSource>(begin, group_->buffer);
+  if(group_->buffer_temp != nullptr){
+    temp_buffer_source = std::make_shared<typename buffer_t::DataSource>(begin, group_->buffer_temp);
+  }
+
+  array_source->advance_to_next_valid();
+  buffer_source->advance_to_next_valid();
+  if(temp_buffer_source){
+    temp_buffer_source->advance_to_next_valid();
+  }
+
+  if(!array_source->has_next && !buffer_source->has_next && 
+    (!temp_buffer_source || !temp_buffer_source->has_next)){
+    valid_ = false;
+  }else{
+    valid_ = true;
+    Next();
+  }
+  //std::cout<<"group valid_:"<<valid_<<std::endl;
 }
 
 template <class key_t, class val_t, bool seq, size_t max_model_n>

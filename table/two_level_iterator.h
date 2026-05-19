@@ -9,6 +9,7 @@
 #include "leveldb/iterator.h"
 #include "table/iterator_wrapper.h"
 #include "leveldb/options.h"
+#include "table/model_reader.h"
 
 namespace leveldb {
 
@@ -21,7 +22,7 @@ class TwoLevelIterator : public Iterator {
   //block_function 传递某个函数
   TwoLevelIterator(Iterator* index_iter, BlockFunction block_function,
                    void* arg, const ReadOptions& options, const bool& is_model, 
-                   const bool& from_data_info);
+                   const bool& from_data_info, ModelReader* model_reader);
   ~TwoLevelIterator() override;
 
   void Seek(const Slice& target) override;
@@ -85,6 +86,7 @@ class TwoLevelIterator : public Iterator {
   std::string data_block_handle_;
   const bool is_model_;
   const bool from_data_info_;
+  ModelReader* model_reader_;
 };
 
 // Return a new two level iterator.  A two-level iterator contains an
@@ -100,7 +102,7 @@ Iterator* NewTwoLevelIterator(
     Iterator* index_iter,
     Iterator* (*block_function)(void* arg, const ReadOptions& options,
                                 const Slice& index_value, const bool& is_model, const bool& from_data_info),
-    void* arg, const ReadOptions& options, const bool& is_model, const bool& from_data_info);
+    void* arg, const ReadOptions& options, const bool& is_model, const bool& from_data_info, ModelReader* model_reader = nullptr);
 
 }  // namespace leveldb
 

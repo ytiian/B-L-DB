@@ -10,6 +10,7 @@
 #include "table/two_level_iterator.h"
 
 #include "leveldb/table.h"
+#include "util/coding.h"
 #include "table/block.h"
 #include "table/format.h"
 #include "table/iterator_wrapper.h"
@@ -22,24 +23,50 @@ namespace leveldb {
 TwoLevelIterator::TwoLevelIterator(Iterator* index_iter,
                                    BlockFunction block_function, void* arg,
                                    const ReadOptions& options, const bool& is_model,
-                                  const bool& from_data_info)
+                                  const bool& from_data_info,
+                                  ModelReader* model_reader)
     : block_function_(block_function),
       arg_(arg),
       options_(options),
       index_iter_(index_iter),
       data_iter_(nullptr),
       is_model_(is_model),
-      from_data_info_(from_data_info) {}
+      from_data_info_(from_data_info),
+      model_reader_(model_reader) {}
 
 TwoLevelIterator::~TwoLevelIterator() = default;
 
 //2，3，5    如果target=4 则停在第三个条目（>=target
 //逻辑：先定位是哪个data block，再定位key
 void TwoLevelIterator::Seek(const Slice& target) {
-  index_iter_.Seek(target);//index_iter现在指向
-  InitDataBlock();
-  if (data_iter_.iter() != nullptr) data_iter_.Seek(target);
-  SkipEmptyDataBlocksForward();
+  if(is_model_){
+    std::pair<int,int> index_range = model_reader_->SeekModel(target);
+    size_t start_index = index_range.first;
+    size_t end_index = index_range.second;
+
+    int block_contain_keys = model_reader_->GetBlockContainKeys();
+    size_t start_data_block = start_index / block_contain_keys;
+    size_t end_data_block = end_index / block_contain_keys;
+    std::string index_key = target.ToString();
+    PutFixed32(&index_key, start_data_block);
+    PutFixed32(&index_key, end_data_block);
+    index_iter_.Seek(index_key);
+
+    InitDataBlock();
+    if (data_iter_.iter() != nullptr){
+      std::string target_key = target.ToString();
+
+      PutFixed32(&target_key, 1);  // start index
+      PutFixed32(&target_key, 0);  // end index
+      data_iter_.Seek(target_key);
+    } 
+    SkipEmptyDataBlocksForward();
+  }else{
+    index_iter_.Seek(target);//index_iter现在指向
+    InitDataBlock();
+    if (data_iter_.iter() != nullptr) data_iter_.Seek(target);
+    SkipEmptyDataBlocksForward();
+  }
 }
 
 //先定位第一个data block，再定位这个block的第一条
@@ -198,8 +225,9 @@ bool TwoLevelIterator::IsIndex() {
 Iterator* NewTwoLevelIterator(Iterator* index_iter,
                               BlockFunction block_function, void* arg,
                               const ReadOptions& options, const bool& is_model,
-                            const bool& from_data_info) {
-  return new TwoLevelIterator(index_iter, block_function, arg, options, is_model, from_data_info);
+                            const bool& from_data_info,
+                          ModelReader* model_reader) {
+  return new TwoLevelIterator(index_iter, block_function, arg, options, is_model, from_data_info, model_reader);
 }
 
 }  // namespace leveldb

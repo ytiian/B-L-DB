@@ -18,6 +18,7 @@
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
 #include "db/dbformat.h"
+#include "table/model_reader.h"
 #include <atomic>
 
 namespace leveldb {
@@ -470,6 +471,15 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
 
 
 Iterator* Table::NewIterator(const ReadOptions& options) const {
+  if(rep_->is_model == true){
+    return NewTwoLevelIterator(
+        rep_->data_info_block->NewIterator(rep_->options.comparator, false),//构造index_block上的迭代器
+        &Table::BlockReader, const_cast<Table*>(this), options, rep_->is_model, true, 
+          NewModelReader(rep_->model_info_block->NewIterator(BytewiseComparator(), false),
+                                    rep_->options.block_contain_keys,
+                                    rep_->common_prefix_len_,
+                                    rep_->error_bound_));              
+  }
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator, false),//构造index_block上的迭代器
       &Table::BlockReader, const_cast<Table*>(this), options, rep_->is_model, false);//BlockReader函数，index value->data block iter
@@ -482,67 +492,59 @@ Status Table::GetByModel(const ReadOptions& options, const Slice& k, void* arg,
   Status s;
   Iterator* miter = rep_->model_info_block->NewIterator(BytewiseComparator(), false);
   //定位条目
-  std::string target = Slice(k.data(), k.size()-8).ToString();     
-  PutFixed32(&target, 1);  // start index
-  PutFixed32(&target, 0);  // end index     
-  //std::cout<<"seek model key:"<<target<<std::endl;                        
-  miter->Seek(target);
-  if(miter->Valid()){
-    Slice handle_value = miter->value();
-    ModelParam param;
-    //std::cout<<"target key:"<<Slice(k.data(), k.size()-8).ToString()<<" model start key:"<<miter->key().ToString()<<std::endl;
-    if (param.DecodeFrom(&handle_value).ok()) {
-      std::pair<size_t, size_t> range = sindex::GreedyPLR::GetSearchRange(Slice(k.data(), k.size()-8).ToString(), rep_->common_prefix_len_, param.slope(), param.intercept(), rep_->error_bound_);
-      //std::cout<<"model predicted range: ["<<range.first<<","<<range.second<<"]"<<std::endl;
-      size_t start_index = range.first;
-      size_t end_index = range.second;
+  ModelReader* model_reader = NewModelReader(miter,
+                                              rep_->options.block_contain_keys,
+                                              rep_->common_prefix_len_,
+                                              rep_->error_bound_);
+  std::pair<size_t,size_t> index_range = model_reader->SeekModel(k);
+  size_t start_index = index_range.first;
+  size_t end_index = index_range.second;
 
-      size_t start_data_block = start_index / rep_->options.block_contain_keys;
-      size_t end_data_block = end_index / rep_->options.block_contain_keys;
+  size_t start_data_block = start_index / rep_->options.block_contain_keys;
+  size_t end_data_block = end_index / rep_->options.block_contain_keys;
 
-      Iterator* iiter = rep_->data_info_block->NewIterator(rep_->options.comparator, false);
-      std::string index_key = k.ToString();
-      PutFixed32(&index_key, start_data_block);
-      PutFixed32(&index_key, end_data_block);
-      iiter->Seek(index_key);
+  Iterator* iiter = rep_->data_info_block->NewIterator(rep_->options.comparator, false);
+  std::string index_key = k.ToString();
+  PutFixed32(&index_key, start_data_block);
+  PutFixed32(&index_key, end_data_block);
+  iiter->Seek(index_key);
 
-      //std::cout<<"data info block key:"<<iiter->key().ToString()<<" "<<k.ToString()<<std::endl;
+  //std::cout<<"data info block key:"<<iiter->key().ToString()<<" "<<k.ToString()<<std::endl;
 
-      if(iiter->Valid()){
-        //[todo]r->data_info_block->Add(r->data_block->SmallestKey(), r->); 
-        Slice handle_value = iiter->value();
-        IndexHandle handle;
-        if(handle.DecodeFrom(&handle_value).ok()){
-          uint32_t block_index = handle.index();
+  if(iiter->Valid()){
+    //[todo]r->data_info_block->Add(r->data_block->SmallestKey(), r->); 
+    Slice handle_value = iiter->value();
+    IndexHandle handle;
+    if(handle.DecodeFrom(&handle_value).ok()){
+      uint32_t block_index = handle.index();
 
-          Iterator* block_iter = BlockReader(this, options, iiter->value(), true, true, true);
-          //在block层面上的对key的查找
-          std::string target = k.ToString();
+      Iterator* block_iter = BlockReader(this, options, iiter->value(), true, true, true);
+      //在block层面上的对key的查找
+      std::string target = k.ToString();
 
-          int left_bound = start_index - block_index *  rep_->options.block_contain_keys;
-          int right_bound = end_index - block_index *  rep_->options.block_contain_keys;
+      int left_bound = start_index - block_index *  rep_->options.block_contain_keys;
+      int right_bound = end_index - block_index *  rep_->options.block_contain_keys;
 
-          PutFixed32(&target, left_bound < 0 ? 0 : left_bound);  // start index
-          PutFixed32(&target, right_bound > rep_->options.block_contain_keys -1 ? rep_->options.block_contain_keys -1 : right_bound);  // end index
-          
-          // std::cout<<"data block bound:"<<left_bound + block_index *  rep_->options.block_contain_keys
-          // <<" "<<right_bound + block_index *  rep_->options.block_contain_keys<<std::endl;
+      PutFixed32(&target, left_bound < 0 ? 0 : left_bound);  // start index
+      PutFixed32(&target, right_bound > rep_->options.block_contain_keys -1 ? rep_->options.block_contain_keys -1 : right_bound);  // end index
+      
+      // std::cout<<"data block bound:"<<left_bound + block_index *  rep_->options.block_contain_keys
+      // <<" "<<right_bound + block_index *  rep_->options.block_contain_keys<<std::endl;
 
-          block_iter->Seek(target);
-          if (block_iter->Valid()) {
-            //？对找到的kv对的某种处理？
-            (*handle_result)(arg, block_iter->key(), block_iter->value());
-          }
-          s = block_iter->status();
-          delete block_iter;          
-        }
+      block_iter->Seek(target);
+      if (block_iter->Valid()) {
+        //？对找到的kv对的某种处理？
+        (*handle_result)(arg, block_iter->key(), block_iter->value());
       }
-      if (s.ok()) {
-        s = iiter->status();
-      }
-      delete iiter;      
+      s = block_iter->status();
+      delete block_iter;          
     }
   }
+  if (s.ok()) {
+    s = iiter->status();
+  }
+  delete iiter;      
+
   delete miter;
   return s;
 }

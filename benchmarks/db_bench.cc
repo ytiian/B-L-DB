@@ -1132,7 +1132,7 @@ class Benchmark {
         for (it->Seek(key); it->Valid() && i < operation.length; it->Next()) {
           uint64_t size = it->key().ToString().size() + it->value().ToString().size();
           i++;
-          thread->stats.FinishedSingleOp();
+        thread->stats.FinishedSingleOp();
           //ycsb_histogram_.at("scan").Add(thread->stats.LastOperationMicros());
         }
         delete it;

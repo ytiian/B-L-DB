@@ -164,7 +164,9 @@ class SIndexWrapper {
     }
 
     // Advance to the first entry with a key >= target
-    void Seek(const key_t& target);
+    void Seek(const index_key_t target){
+      return sindex_iterator_->Seek(target);
+    }
 
     // Position at the first entry in list.
     // Final state of iterator is Valid() iff list is not empty.

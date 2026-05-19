@@ -805,6 +805,22 @@ inline void Root<key_t, val_t, seq>::Iterator::SeekToFirst() {
 }
 
 template <class key_t, class val_t, bool seq>
+inline void Root<key_t, val_t, seq>::Iterator::Seek(const key_t &begin) {
+  latest_group_pivot_ = key_t::min();
+
+  current_group_ = root_->locate_group_pt2(begin, root_->locate_group_pt1(begin, group_i));
+  if(current_group_ != nullptr){
+    group_iterator_ = current_group_->NewIterator();
+    group_iterator_->Seek(begin);
+    valid_ = group_iterator_->Valid();
+  }else{
+    valid_ =false;
+    group_iterator_ = nullptr;
+  }
+}
+
+
+template <class key_t, class val_t, bool seq>
 inline void Root<key_t, val_t, seq>::Iterator::Next() {
   assert(valid_);
   assert(group_iterator_ != nullptr);

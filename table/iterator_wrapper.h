@@ -65,6 +65,7 @@ class IteratorWrapper {
     assert(iter_);
     iter_->Seek(k);
     Update();
+    UpdateIndex();
   }
   void SeekToFirst() {
     //std::cout<<"iter SeekToFirst"<<std::endl;

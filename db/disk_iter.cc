@@ -9,6 +9,7 @@
 #include "db/dbformat.h"
 #include <unordered_map>
 #include <chrono>
+#include <iostream>
 
 namespace leveldb {
 namespace{
@@ -59,15 +60,33 @@ class DiskIterator : public Iterator {
 
   }        
 
-  void Seek(const Slice& target) override{
-    // for (int i = 0; i < n_; i++) {
-    //   children_[i].Seek(target);
-    // }
-    // uint64_t run_no;
-    // int index;
-    // index_iter_->Seek(target.ToString());
-    // SeekFindKV();
-    // //direction_ = kForward;          
+  void Seek(const Slice& target) override { 
+    for (int i = 0; i < n_; i++) { 
+       //auto t_seek_begin = std::chrono::high_resolution_clock::now();
+      children_[i].Seek(target); 
+      //  auto t_seek_end = std::chrono::high_resolution_clock::now();
+      //   auto seek_time_us =
+      //     std::chrono::duration_cast<std::chrono::microseconds>(
+      //     t_seek_end - t_seek_begin)
+      //     .count();
+      //     std::cout<<"DiskIterator Seek child["<<i<<"] time us:"<<seek_time_us<<std::endl;
+    } 
+    //std::cout<<"children number:"<<n_<<std::endl;
+    std::string sindex_target_key = Slice(target.data(), target.size()-8).ToString();
+    // auto t_index_begin = std::chrono::high_resolution_clock::now();
+    index_iter_->Seek(index_key_t(sindex_target_key)); 
+    // auto t_index_end = std::chrono::high_resolution_clock::now();
+    // auto index_seek_time_us =
+    //   std::chrono::duration_cast<std::chrono::microseconds>(
+    //       t_index_end - t_index_begin)
+    //       .count();
+    // std::cout<<"DiskIterator Seek index_iter_ time us:"<<index_seek_time_us<<std::endl;
+
+    SeekFindKV(); 
+    if(current_ == nullptr){
+       //std::cout<<"DiskIterator Seek key not found:"<<target.ToString()<<std::endl;
+      return ; 
+    } 
   }
 
   void SeekFindKV(){
@@ -105,6 +124,7 @@ class DiskIterator : public Iterator {
 
   Slice key() const override{
     assert(Valid());
+    //assert(current_ != nullptr);
     return current_->key();
   }
 
@@ -152,6 +172,7 @@ class DiskIterator : public Iterator {
 
     bool init = false;
     while(comparator_->Compare(ExtractUserKey(children_[index].indexKey()), sindex_target_key) < 0){
+      //std::cout<<"index key:"<<children_[index].indexKey().ToString()<<" sindex_key:"<<sindex_target_key.ToString()<<"compare: "<<comparator_->Compare(ExtractUserKey(children_[index].indexKey()), sindex_target_key)<<std::endl;
       children_[index].NextIndex();
       init = true;
     }

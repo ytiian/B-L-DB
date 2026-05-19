@@ -110,6 +110,12 @@ void SIndex<key_t, val_t, seq>::Iterator::SeekToFirst(){
 }
 
 template <class key_t, class val_t, bool seq>
+void SIndex<key_t, val_t, seq>::Iterator::Seek(const key_t& begin){
+  rcu_progress(worker_id);
+  return root_iterator_->Seek(begin);
+}
+
+template <class key_t, class val_t, bool seq>
 bool SIndex<key_t, val_t, seq>::Iterator::Valid(){
   rcu_progress(worker_id);
   return root_iterator_->Valid();
